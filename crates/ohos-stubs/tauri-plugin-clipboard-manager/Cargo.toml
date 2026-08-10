@@ -1,0 +1,15 @@
+[package]
+name = "cv-tauri-plugin-clipboard-manager"
+version = "0.1.0"
+description = "OHOS stub for tauri-plugin-clipboard-manager"
+edition = "2024"
+publish = false
+links = "cv-tauri-plugin-clipboard-manager"
+
+[dependencies]
+tauri = { git = "https://github.com/tauri-apps/tauri", branch = "feat/open-harmony" }
+thiserror = "2"
+serde = { workspace = true, features = ["derive"] }
+
+[build-dependencies]
+tauri-plugin = { git = "https://github.com/tauri-apps/tauri", branch = "feat/open-harmony" }

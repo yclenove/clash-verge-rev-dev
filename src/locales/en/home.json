@@ -1,0 +1,200 @@
+{
+  "page": {
+    "tooltips": {
+      "lightweightMode": "Lightweight Mode",
+      "manual": "Manual",
+      "openPortSettings": "Open port settings",
+      "settings": "Home Settings"
+    },
+    "proxyServiceAddress": "Proxy service",
+    "cards": {
+      "trafficStats": "Traffic Stats",
+      "networkSettings": "Network Settings",
+      "proxyMode": "Proxy Mode",
+      "networkMode": "Network & Mode",
+      "overview": "Overview"
+    },
+    "settings": {
+      "cards": {
+        "profile": "Subscription & Proxy",
+        "network": "Network & Mode",
+        "traffic": "Traffic Stats Card",
+        "tests": "Website Tests Card",
+        "ip": "IP Information Card",
+        "clashInfo": "Clash Info Cards",
+        "systemInfo": "System Info"
+      },
+      "orderHint": "Drag the handle or use the arrows to reorder sections",
+      "emptyHidden": "All sections are hidden. Open settings to enable cards.",
+      "restoreOrder": "Restore default order",
+      "tooltips": {
+        "moveUp": "Move up",
+        "moveDown": "Move down"
+      },
+      "title": "Home Settings"
+    },
+    "title": "Home"
+  },
+  "components": {
+    "proxyTun": {
+      "status": {
+        "systemProxyEnabled": "System Proxy Enabled",
+        "systemProxyDisabled": "System Proxy Disabled",
+        "tunModeServiceRequired": "TUN Mode Service Required",
+        "tunModeEnabled": "TUN Mode Enabled",
+        "tunModeDisabled": "TUN Mode Disabled"
+      },
+      "tooltips": {
+        "systemProxy": "System Proxy Info",
+        "tunMode": "TUN Mode Intercept Info",
+        "dnsOverwrite": "Let the Clash core handle DNS resolution (remote DNS), avoiding local DNS pollution that can block some websites. Click the label to edit the DNS config."
+      },
+      "labels": {
+        "remoteDns": "Remote DNS"
+      }
+    },
+    "clashInfo": {
+      "title": "Clash Info",
+      "fields": {
+        "coreVersion": "Core Version",
+        "systemProxyAddress": "System Proxy Address",
+        "mixedPort": "Mixed Port",
+        "uptime": "Uptime",
+        "rulesCount": "Rules Count"
+      }
+    },
+    "systemInfo": {
+      "title": "System Info",
+      "sections": {
+        "clash": "Clash",
+        "system": "System",
+        "network": "Outbound IP"
+      },
+      "fields": {
+        "osInfo": "OS Info",
+        "autoLaunch": "Auto Launch",
+        "runningMode": "Running Mode",
+        "lastCheckUpdate": "Last Check Update",
+        "vergeVersion": "Verge Version"
+      },
+      "actions": {
+        "settings": "Settings"
+      },
+      "badges": {
+        "adminMode": "Administrator Mode",
+        "serviceMode": "Service Mode",
+        "sidecarMode": "User Mode",
+        "adminServiceMode": "Admin + Service Mode"
+      }
+    },
+    "ipInfo": {
+      "title": "IP Information",
+      "labels": {
+        "ip": "IP",
+        "asn": "ASN",
+        "isp": "ISP",
+        "org": "ORG",
+        "location": "Location",
+        "timezone": "Timezone",
+        "autoRefresh": "Auto refresh",
+        "unknown": "Unknown",
+        "country": "Country/Region"
+      },
+      "errors": {
+        "load": "Failed to get IP info",
+        "loadWithDetails": "Failed to get IP info: {{message}}",
+        "noServices": "No IP detection services are available"
+      },
+      "refresh": "Refresh IP info"
+    },
+    "currentProxy": {
+      "title": "Current Node",
+      "actions": {
+        "refreshDelay": "Delay check",
+        "enableNode": "Enable",
+        "enabledNode": "Active"
+      },
+      "labels": {
+        "globalMode": "Global Mode",
+        "directMode": "Direct Mode",
+        "group": "Proxy Group",
+        "proxy": "Proxy",
+        "noActiveNode": "No active proxy node",
+        "noSubscriptionNodes": "No available nodes for this subscription",
+        "subscription": "Subscription",
+        "allSubscriptions": "All subscriptions",
+        "autoMode": "Auto",
+        "autoLogAlertThreshold": "Alert threshold",
+        "autoLogAlertThresholdUnit": "hits",
+        "policyGroups": "Policy Groups",
+        "otherNodes": "Other Nodes",
+        "allNodes": "All nodes",
+        "nodeGroup": "Group"
+      },
+      "tooltips": {
+        "showIp": "Show IP",
+        "hideIp": "Hide IP",
+        "copyIp": "Copy IP",
+        "toggleIp": "Click to show or hide the IP",
+        "autoMode": "When on, auto-select the best node by latency; URLTest groups are unfixed",
+        "autoLogAlertThreshold": "Once this many warning/error log lines arrive within {{minutes}} minutes, update the subscription and switch to a different node by latency",
+        "enableNode": "Double-click a node or click Enable"
+      },
+      "status": {
+        "ipLoading": "Loading…",
+        "ipUnavailable": "Unavailable",
+        "testing": "Testing",
+        "untested": "Not tested",
+        "error": "Error",
+        "timeout": "Timeout",
+        "latencyHigh": "High latency",
+        "latencyMedium": "Moderate latency",
+        "latencyGood": "Good latency",
+        "latencyExcellent": "Excellent latency",
+        "uninitialized": "Not initialized",
+        "noProxyNode": "No proxy node",
+        "autoOn": "On",
+        "autoOff": "Off"
+      }
+    },
+    "tests": {
+      "title": "Website Tests"
+    },
+    "traffic": {
+      "metrics": {
+        "uploadSpeed": "Upload Speed",
+        "downloadSpeed": "Download Speed",
+        "activeConnections": "Active Connections",
+        "memoryUsage": "Core Usage"
+      },
+      "legends": {
+        "upload": "Upload",
+        "download": "Download"
+      },
+      "patterns": {
+        "minutes": "{{time}} Minutes"
+      },
+      "unknownTime": "Unknown time",
+      "chartStyles": {
+        "smooth": "Smooth",
+        "linear": "Linear"
+      },
+      "diagnostics": "Points: {{points}} | Compressed: {{compressed}} | FPS: {{fps}}"
+    },
+    "clashMode": {
+      "errors": {
+        "communication": "Core communication error, please restart your computer and try again"
+      },
+      "labels": {
+        "rule": "Rule",
+        "global": "Global",
+        "direct": "Direct"
+      },
+      "descriptions": {
+        "rule": "Automatically choose proxies according to the rule set.",
+        "global": "Forward all network requests through the selected proxy.",
+        "direct": "Bypass the proxy and connect to the internet directly."
+      }
+    }
+  }
+}

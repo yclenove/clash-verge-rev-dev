@@ -1,0 +1,18 @@
+{
+  "page": {
+    "title": "Logs"
+  },
+  "actions": {
+    "showDescending": "Newest first",
+    "showAscending": "Oldest first"
+  },
+  "range": {
+    "label": "Time range",
+    "today": "Today",
+    "last3": "Last 3 days"
+  },
+  "pagination": {
+    "page": "Page {{page}} / {{total}}",
+    "pageSize": "{{count}} per page"
+  }
+}

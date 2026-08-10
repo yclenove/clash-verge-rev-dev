@@ -1,0 +1,18 @@
+{
+  "page": {
+    "title": "日志"
+  },
+  "actions": {
+    "showDescending": "按时间倒序",
+    "showAscending": "按时间正序"
+  },
+  "range": {
+    "label": "时间范围",
+    "today": "当天",
+    "last3": "近 3 天"
+  },
+  "pagination": {
+    "page": "第 {{page}} / {{total}} 页",
+    "pageSize": "每页 {{count}} 条"
+  }
+}

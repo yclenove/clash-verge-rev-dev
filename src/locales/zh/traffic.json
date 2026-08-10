@@ -1,0 +1,75 @@
+{
+  "page": {
+    "title": "流量统计",
+    "hero": {
+      "download": "实时下载",
+      "upload": "实时上传",
+      "connections": "活动连接",
+      "memory": "内存占用"
+    },
+    "metrics": {
+      "uploadSpeed": "上传速度",
+      "downloadSpeed": "下载速度",
+      "todayUpload": "今日累计上传",
+      "todayDownload": "今日累计下载",
+      "uploadTotal": "总上传量",
+      "downloadTotal": "总下载量",
+      "memoryUsage": "内存占用",
+      "activeConnections": "活动连接",
+      "sessionTotal": "会话总流量"
+    },
+    "graph": {
+      "title": "实时流量曲线",
+      "hint": "点击图表切换显示样式"
+    },
+    "consumers": {
+      "title": "流量排行",
+      "subtitle": "按进程/主机累计用量排序，短连接也会保留",
+      "groupProcess": "按进程",
+      "groupHost": "按主机",
+      "groupConnection": "按连接",
+      "columnTarget": "目标 / 进程",
+      "columnChain": "代理链",
+      "columnUpload": "上传",
+      "columnDownload": "下载",
+      "columnSpeed": "实时速度",
+      "empty": "暂无活动连接或累计流量",
+      "connectionCount": "{{count}} 个连接",
+      "unknownProcess": "未知进程",
+      "unknownHost": "未知主机",
+      "search": "搜索进程 / 主机 / 代理链",
+      "pause": "暂停刷新",
+      "resume": "继续刷新",
+      "paused": "已暂停",
+      "showing": "显示 {{shown}} / {{total}}",
+      "loadMore": "加载更多",
+      "noMatch": "无匹配的流量项",
+      "detail": {
+        "chains": "代理链",
+        "source": "来源",
+        "destination": "目标地址",
+        "process": "进程",
+        "type": "类型",
+        "rule": "匹配规则",
+        "startTime": "开始时间",
+        "duration": "持续时间",
+        "connections": "连接列表",
+        "truncated": "仅显示前 50 条"
+      },
+      "subtitleHistory": "按日期范围汇总 SQLite 历史流量",
+      "viewRealtime": "实时流量",
+      "viewHistory": "历史流量",
+      "rangeToday": "今天",
+      "rangeLast3": "近 3 天",
+      "rangeLast7": "近 7 天",
+      "rangeLast30": "近 30 天",
+      "rangeAll": "全部",
+      "clearHistory": "清空历史",
+      "clearHistoryConfirm": "确定清空全部历史流量排行数据？此操作不可恢复。",
+      "historyDownloadTotal": "下载总量",
+      "historyUploadTotal": "上传总量",
+      "historyHint": "历史数据保存在本机 SQLite 数据库中，应用重启后仍可查看",
+      "emptyHistory": "所选时间范围内暂无历史流量"
+    }
+  }
+}

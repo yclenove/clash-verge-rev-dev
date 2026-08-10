@@ -1,0 +1,23 @@
+{
+  "identifier": "ohos-capability",
+  "description": "Minimal permissions for OpenHarmony first HAP",
+  "local": true,
+  "windows": ["main"],
+  "webviews": ["main"],
+  "permissions": [
+    "core:default",
+    "mihomo:default",
+    "core:window:allow-create",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-title",
+    "core:window:allow-set-size",
+    "core:window:allow-set-focus",
+    "core:webview:allow-print",
+    "cv-tauri-plugin-clipboard-manager:default",
+    "cv-tauri-plugin-clipboard-manager:allow-read-text",
+    "cv-tauri-plugin-clipboard-manager:allow-write-text",
+    "cv-tauri-plugin-clipboard-manager:allow-clear"
+  ]
+}

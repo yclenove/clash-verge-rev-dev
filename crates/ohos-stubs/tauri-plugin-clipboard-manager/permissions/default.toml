@@ -1,0 +1,7 @@
+[default]
+description = "Default permissions for the clipboard manager plugin"
+permissions = [
+  "allow-write-text",
+  "allow-read-text",
+  "allow-clear",
+]

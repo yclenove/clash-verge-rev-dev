@@ -1,0 +1,13 @@
+[package]
+name = "cv-tauri-plugin-shell"
+version = "0.1.0"
+description = "OHOS tauri-plugin-shell: NativeChildProcess + libmihomo_runner"
+edition = "2024"
+publish = false
+build = "build.rs"
+
+[dependencies]
+tauri = { git = "https://github.com/tauri-apps/tauri", branch = "feat/open-harmony" }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+libc = "0.2"

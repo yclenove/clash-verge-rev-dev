@@ -1,0 +1,10 @@
+[package]
+name = "cv-tauri-plugin-notification"
+version = "0.1.0"
+description = "OHOS stub for tauri-plugin-notification"
+edition = "2024"
+publish = false
+
+[dependencies]
+tauri = { git = "https://github.com/tauri-apps/tauri", branch = "feat/open-harmony" }
+thiserror = "2"

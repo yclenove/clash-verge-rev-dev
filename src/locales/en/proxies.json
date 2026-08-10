@@ -1,0 +1,139 @@
+{
+  "page": {
+    "modes": {
+      "rule": "Rule",
+      "global": "Global",
+      "direct": "Direct"
+    },
+    "actions": {
+      "toggleChain": "Chain Proxy",
+      "connect": "Connect",
+      "disconnect": "Disconnect",
+      "connecting": "Connecting...",
+      "clearChainConfig": "Delete Chain Config"
+    },
+    "provider": {
+      "title": "Proxy Provider",
+      "actions": {
+        "updateAll": "Update All",
+        "update": "Update"
+      }
+    },
+    "rules": {
+      "title": "Chain Exit Group",
+      "select": "Select Exit Group",
+      "search": "Search group name"
+    },
+    "labels": {
+      "proxyCount": "Proxy Count",
+      "delayCheckReset": "Delay check to cancel fixed",
+      "nodeCount": "{{count}} nodes"
+    },
+    "groupTypes": {
+      "Selector": "Selector",
+      "URLTest": "URL Test",
+      "Fallback": "Fallback",
+      "LoadBalance": "Load Balance",
+      "Relay": "Relay",
+      "Direct": "Direct",
+      "Reject": "Reject",
+      "Pass": "Pass"
+    },
+    "tooltips": {
+      "locate": "locate",
+      "delayCheck": "Delay check",
+      "sortDefault": "Sort by default",
+      "sortDelay": "Sort by delay",
+      "sortName": "Sort by name",
+      "delayCheckUrl": "Delay check URL",
+      "showBasic": "Proxy basic",
+      "showDetail": "Proxy detail",
+      "filter": "Filter"
+    },
+    "placeholders": {
+      "delayCheckUrl": "Delay check URL"
+    },
+    "empty": {
+      "noAvailableGroups": "No proxy groups are available",
+      "noProxies": "No proxies",
+      "noSubscriptions": {
+        "title": "No subscription imported",
+        "description": "There is nothing to display on the Proxies page. Go to Profiles to import subscriptions; all imported subscriptions stay active and their nodes are merged automatically."
+      },
+      "inactiveSubscription": {
+        "title": "Subscriptions not ready",
+        "description": "Subscriptions were found, but the runtime config is not ready yet. Open Profiles and reactivate, or check the subscription contents and try again."
+      },
+      "coreUnavailable": {
+        "title": "Core temporarily unavailable",
+        "description": "Proxy information could not be retrieved from the core. Try restarting the core. If the problem persists, open the logs folder and check the core logs."
+      },
+      "noProxyInfo": {
+        "title": "No proxy information available",
+        "description": "There are no proxy groups or nodes to display. Check that imported subscriptions contain valid groups and nodes. You can right-click a subscription to set it as the base config, or restart the core and review the logs."
+      },
+      "actions": {
+        "openProfiles": "Go to Profiles",
+        "restartCore": "Restart Core",
+        "openLogs": "Open Logs Folder"
+      }
+    },
+    "chain": {
+      "header": "Chain Proxy Config",
+      "warning": "Chain proxy will significantly reduce network speed. If you do not have a clear business need, or do not understand this configuration, keep it disabled.",
+      "empty": "Chain proxy will significantly reduce network speed. If you do not have a clear business need, or do not understand this configuration, keep it disabled.",
+      "instruction": "Click nodes in order to add to proxy chain",
+      "minimumNodes": "Chain proxy requires at least 2 nodes",
+      "minimumNodesHint": "Chain proxy requires at least 2 nodes. Please add one more node.",
+      "connectFailed": "Failed to connect to proxy chain",
+      "disconnectFailed": "Failed to disconnect from proxy chain",
+      "duplicateNode": "Proxy node already exists in chain",
+      "entryNode": "Entry",
+      "exitNode": "Exit",
+      "picker": {
+        "title": "Add Node from Subscriptions",
+        "search": "Search node name, subscription or server",
+        "empty": "No matching nodes found",
+        "added": "Added",
+        "addButton": "Add node from any subscription"
+      },
+      "otherNodes": "Other nodes"
+    },
+    "messages": {
+      "directMode": "Direct Mode"
+    },
+    "title": {
+      "default": "Proxy Groups",
+      "chainMode": "Proxy Chain Mode"
+    }
+  },
+  "feedback": {
+    "notifications": {
+      "chainDisconnectedForGroupChange": "The active chain was disconnected; the draft nodes were preserved for the new exit group",
+      "provider": {
+        "updateSuccess": "{{name}} updated successfully",
+        "updateFailed": "Failed to update {{name}}: {{message}}",
+        "genericError": "Update failed: {{message}}",
+        "none": "No providers available to update",
+        "allUpdated": "All providers updated successfully"
+      }
+    }
+  },
+  "components": {
+    "enums": {
+      "strategies": {
+        "select": "Select proxy manually",
+        "url-test": "Select proxy based on URL test delay",
+        "fallback": "Switch to another proxy on error",
+        "load-balance": "Distribute proxy based on load balancing",
+        "relay": "Pass through the defined proxy chain"
+      },
+      "policies": {
+        "DIRECT": "Data goes directly outbound (DIRECT)",
+        "REJECT": "Intercepts requests (REJECT)",
+        "REJECT-DROP": "Discards requests (REJECT-DROP)",
+        "PASS": "Skips this rule when matched (PASS)"
+      }
+    }
+  }
+}

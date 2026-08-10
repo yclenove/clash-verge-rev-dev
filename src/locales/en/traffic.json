@@ -1,0 +1,75 @@
+{
+  "page": {
+    "title": "Traffic",
+    "hero": {
+      "download": "Download",
+      "upload": "Upload",
+      "connections": "Active",
+      "memory": "Memory"
+    },
+    "metrics": {
+      "uploadSpeed": "Upload Speed",
+      "downloadSpeed": "Download Speed",
+      "todayUpload": "Today's Upload",
+      "todayDownload": "Today's Download",
+      "uploadTotal": "Total Upload",
+      "downloadTotal": "Total Download",
+      "memoryUsage": "Memory",
+      "activeConnections": "Active Connections",
+      "sessionTotal": "Session Total"
+    },
+    "graph": {
+      "title": "Realtime Traffic",
+      "hint": "Click the chart to toggle display style"
+    },
+    "consumers": {
+      "title": "Top Consumers",
+      "subtitle": "Sorted by cumulative usage; short-lived connections are kept",
+      "groupProcess": "By Process",
+      "groupHost": "By Host",
+      "groupConnection": "By Connection",
+      "columnTarget": "Target / Process",
+      "columnChain": "Chain",
+      "columnUpload": "Upload",
+      "columnDownload": "Download",
+      "columnSpeed": "Live Speed",
+      "empty": "No active connections or accumulated traffic",
+      "connectionCount": "{{count}} connections",
+      "unknownProcess": "Unknown process",
+      "unknownHost": "Unknown host",
+      "search": "Search process / host / chain",
+      "pause": "Pause refresh",
+      "resume": "Resume refresh",
+      "paused": "Paused",
+      "showing": "Showing {{shown}} / {{total}}",
+      "loadMore": "Load more",
+      "noMatch": "No matching consumers",
+      "detail": {
+        "chains": "Proxy Chain",
+        "source": "Source",
+        "destination": "Destination",
+        "process": "Process",
+        "type": "Type",
+        "rule": "Rule",
+        "startTime": "Started",
+        "duration": "Duration",
+        "connections": "Connections",
+        "truncated": "Showing first 50 only"
+      },
+      "subtitleHistory": "Historical totals by date range from SQLite",
+      "viewRealtime": "Realtime",
+      "viewHistory": "History",
+      "rangeToday": "Today",
+      "rangeLast3": "Last 3 days",
+      "rangeLast7": "Last 7 days",
+      "rangeLast30": "Last 30 days",
+      "rangeAll": "All",
+      "clearHistory": "Clear history",
+      "clearHistoryConfirm": "Clear all historical traffic ranking data? This cannot be undone.",
+      "historyDownloadTotal": "Download total",
+      "historyUploadTotal": "Upload total",
+      "historyHint": "History is stored in the local SQLite database and survives restarts",
+      "emptyHistory": "No historical traffic in the selected range"
+    }
+  }
+}
