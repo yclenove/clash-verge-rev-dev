@@ -451,6 +451,7 @@ impl CoreManager {
                         Type::Core,
                         "服务 owner 凭据不可恢复，跳过端口回退，直接 Sidecar: {err}"
                     );
+                    Config::mark_startup_owner_mismatch();
                     self.start_core_by_sidecar().await
                 }
                 Err(err) => Err(err),

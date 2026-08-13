@@ -36,6 +36,7 @@ struct MixedPortFallback {
 static PENDING_FALLBACK_NOTICE: Lazy<Mutex<Option<MixedPortFallback>>> = Lazy::new(|| Mutex::new(None));
 static STARTUP_CORE_BLOCKED: AtomicBool = AtomicBool::new(false);
 static STARTUP_CORE_BLOCK_REASON: Lazy<Mutex<Option<String>>> = Lazy::new(|| Mutex::new(None));
+static STARTUP_OWNER_MISMATCH: AtomicBool = AtomicBool::new(false);
 
 impl Config {
     pub(crate) async fn resolve_startup_mixed_port() -> Result<bool> {
@@ -47,6 +48,10 @@ impl Config {
     }
 
     async fn resolve_startup_mixed_port_inner() -> Result<bool> {
+        if Self::startup_owner_mismatch() {
+            return Ok(false);
+        }
+
         let clash = Self::clash().await.latest_arc();
         let verge = Self::verge().await.latest_arc();
         let selected_port = clash.get_mixed_port();
@@ -185,6 +190,14 @@ impl Config {
             new_port
         );
         Ok(())
+    }
+
+    pub(crate) fn mark_startup_owner_mismatch() {
+        STARTUP_OWNER_MISMATCH.store(true, Ordering::Release);
+    }
+
+    pub(crate) fn startup_owner_mismatch() -> bool {
+        STARTUP_OWNER_MISMATCH.load(Ordering::Acquire)
     }
 
     pub(crate) fn block_startup_core(error: &anyhow::Error) {
