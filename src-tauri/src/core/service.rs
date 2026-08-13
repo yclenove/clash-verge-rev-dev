@@ -80,15 +80,32 @@ pub(crate) fn clear_active_service_session() {
     ACTIVE_SERVICE_SESSION.lock().take();
 }
 
+/// How a Service start failure should be handled on the hot paths.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServiceStartFailureAction {
+    /// Owner credentials: go to Sidecar immediately; do not retry or hop ports.
+    FailFastToSidecar,
+    /// Other errors: Service start retries and mixed-port fallback remain allowed.
+    RetryOrPortFallback,
+}
+
 /// Service owner-credential failures cannot be recovered by retrying or hopping ports.
 pub fn is_unrecoverable_service_owner_error(err: &str) -> bool {
     let s = err.to_ascii_lowercase();
     s.contains("unexpected owner") || s.contains("different windows user") || s.contains("owner credential")
 }
 
+pub fn classify_service_start_failure(err: &str) -> ServiceStartFailureAction {
+    if is_unrecoverable_service_owner_error(err) {
+        ServiceStartFailureAction::FailFastToSidecar
+    } else {
+        ServiceStartFailureAction::RetryOrPortFallback
+    }
+}
+
 #[cfg(test)]
 mod owner_error_tests {
-    use super::is_unrecoverable_service_owner_error;
+    use super::{ServiceStartFailureAction, classify_service_start_failure, is_unrecoverable_service_owner_error};
 
     #[test]
     fn matches_ipc_owner_mismatch() {
@@ -99,6 +116,18 @@ mod owner_error_tests {
             "owner token belongs to a different Windows user"
         ));
         assert!(!is_unrecoverable_service_owner_error("bind: address already in use"));
+    }
+
+    #[test]
+    fn owner_mismatch_fail_fast_skips_retry_and_port_fallback() {
+        assert_eq!(
+            classify_service_start_failure("owner credential path has an unexpected owner"),
+            ServiceStartFailureAction::FailFastToSidecar
+        );
+        assert_eq!(
+            classify_service_start_failure("bind: address already in use"),
+            ServiceStartFailureAction::RetryOrPortFallback
+        );
     }
 }
 

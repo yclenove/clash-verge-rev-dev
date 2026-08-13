@@ -442,7 +442,10 @@ impl CoreManager {
         let result = match startup {
             StartupDecision::Service => match self.start_core_by_service().await {
                 Ok(()) => Ok(()),
-                Err(err) if crate::core::service::is_unrecoverable_service_owner_error(&err.to_string()) => {
+                Err(err)
+                    if crate::core::service::classify_service_start_failure(&format!("{err:#}"))
+                        == crate::core::service::ServiceStartFailureAction::FailFastToSidecar =>
+                {
                     logging!(
                         warn,
                         Type::Core,

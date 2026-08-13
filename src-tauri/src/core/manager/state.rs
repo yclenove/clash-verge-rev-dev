@@ -453,7 +453,9 @@ impl CoreManager {
                         return Ok(());
                     }
                     Err(e) => {
-                        if service::is_unrecoverable_service_owner_error(&e.to_string()) {
+                        if service::classify_service_start_failure(&format!("{e:#}"))
+                            == service::ServiceStartFailureAction::FailFastToSidecar
+                        {
                             logging!(warn, Type::Core, "服务 owner 凭据不可恢复，跳过剩余启动重试: {e}");
                             return Err(e);
                         }

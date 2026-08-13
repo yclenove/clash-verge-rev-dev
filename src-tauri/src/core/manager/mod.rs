@@ -261,7 +261,9 @@ impl CoreManager {
                     return Ok(!matches!(*self.get_running_mode(), RunningMode::NotRunning));
                 }
                 Err(start_error) if retries < MAX_PORT_FALLBACK_RETRIES => {
-                    if crate::core::service::is_unrecoverable_service_owner_error(&start_error.to_string()) {
+                    if crate::core::service::classify_service_start_failure(&format!("{start_error:#}"))
+                        == crate::core::service::ServiceStartFailureAction::FailFastToSidecar
+                    {
                         crate::config::Config::notify_startup_mixed_port_fallback();
                         return Err(start_error);
                     }
