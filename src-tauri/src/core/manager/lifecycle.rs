@@ -440,7 +440,18 @@ impl CoreManager {
         }
 
         let result = match startup {
-            StartupDecision::Service => self.start_core_by_service().await,
+            StartupDecision::Service => match self.start_core_by_service().await {
+                Ok(()) => Ok(()),
+                Err(err) if crate::core::service::is_unrecoverable_service_owner_error(&err.to_string()) => {
+                    logging!(
+                        warn,
+                        Type::Core,
+                        "服务 owner 凭据不可恢复，跳过端口回退，直接 Sidecar: {err}"
+                    );
+                    self.start_core_by_sidecar().await
+                }
+                Err(err) => Err(err),
+            },
             StartupDecision::Sidecar => self.start_core_by_sidecar().await,
             StartupDecision::Wait => Ok(()),
         };

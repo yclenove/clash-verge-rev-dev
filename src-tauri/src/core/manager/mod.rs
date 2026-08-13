@@ -2,6 +2,7 @@ mod config;
 mod lifecycle;
 mod state;
 
+use crate::platform_plugins::shell::process::CommandChild;
 use anyhow::Result;
 use arc_swap::{ArcSwap, ArcSwapOption};
 use clash_verge_logging::{Type, logging};
@@ -14,7 +15,6 @@ use std::{
     },
     time::Instant,
 };
-use crate::platform_plugins::shell::process::CommandChild;
 
 use crate::core::clash_log::ClashLogBuffer;
 use crate::core::log_store;
@@ -261,6 +261,10 @@ impl CoreManager {
                     return Ok(!matches!(*self.get_running_mode(), RunningMode::NotRunning));
                 }
                 Err(start_error) if retries < MAX_PORT_FALLBACK_RETRIES => {
+                    if crate::core::service::is_unrecoverable_service_owner_error(&start_error.to_string()) {
+                        crate::config::Config::notify_startup_mixed_port_fallback();
+                        return Err(start_error);
+                    }
                     if !matches!(*self.get_running_mode(), RunningMode::NotRunning) {
                         crate::config::Config::notify_startup_mixed_port_fallback();
                         return Err(start_error);

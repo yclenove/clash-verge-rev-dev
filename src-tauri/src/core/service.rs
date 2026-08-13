@@ -80,6 +80,28 @@ pub(crate) fn clear_active_service_session() {
     ACTIVE_SERVICE_SESSION.lock().take();
 }
 
+/// Service owner-credential failures cannot be recovered by retrying or hopping ports.
+pub fn is_unrecoverable_service_owner_error(err: &str) -> bool {
+    let s = err.to_ascii_lowercase();
+    s.contains("unexpected owner") || s.contains("different windows user") || s.contains("owner credential")
+}
+
+#[cfg(test)]
+mod owner_error_tests {
+    use super::is_unrecoverable_service_owner_error;
+
+    #[test]
+    fn matches_ipc_owner_mismatch() {
+        assert!(is_unrecoverable_service_owner_error(
+            "owner credential path has an unexpected owner"
+        ));
+        assert!(is_unrecoverable_service_owner_error(
+            "owner token belongs to a different Windows user"
+        ));
+        assert!(!is_unrecoverable_service_owner_error("bind: address already in use"));
+    }
+}
+
 /// Ask the Service whether it speaks the staging half of the protocol.
 ///
 /// A failure here is not a failure to start: it only costs the fast path, so it is reported as

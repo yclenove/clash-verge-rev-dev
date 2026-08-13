@@ -1,6 +1,7 @@
 #[cfg(test)]
 use super::claim_core_readiness_generation;
 use super::{CoreManager, RunningMode};
+use crate::platform_plugins::shell::ShellExt as _;
 use crate::{
     AsyncHandler,
     config::Config,
@@ -16,7 +17,6 @@ use scopeguard::defer;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 use tauri_plugin_mihomo::MihomoExt as _;
-use crate::platform_plugins::shell::ShellExt as _;
 use tokio::fs;
 
 // Desktop sidecars come up quickly; OHOS NCP + large runtime yaml needs a longer window
@@ -453,6 +453,10 @@ impl CoreManager {
                         return Ok(());
                     }
                     Err(e) => {
+                        if service::is_unrecoverable_service_owner_error(&e.to_string()) {
+                            logging!(warn, Type::Core, "服务 owner 凭据不可恢复，跳过剩余启动重试: {e}");
+                            return Err(e);
+                        }
                         logging!(
                             warn,
                             Type::Core,
