@@ -525,6 +525,24 @@ impl CoreManager {
         .await
     }
 
+    pub(crate) async fn restart_core_during_config_update(&self) -> Result<()> {
+        // 调用方必须已经持有 config_update 标志。此处只拿 lifecycle_lock。
+        let _life = self.lifecycle_lock.lock().await;
+        logging!(info, Type::Core, "正在重启核心（配置更新路径）");
+        run_core_replacement_transition(
+            || self.controlled_stop_core_inner(),
+            || async {
+                self.start_core_inner().await?;
+                if matches!(*self.get_running_mode(), RunningMode::NotRunning) {
+                    anyhow::bail!("core did not become ready after restart");
+                }
+                Ok(())
+            },
+            || self.apply_proxy_after_start(),
+        )
+        .await
+    }
+
     pub async fn change_core(&self, clash_core: &String) -> Result<(), String> {
         if !IVerge::VALID_CLASH_CORES.contains(&clash_core.as_str()) {
             return Err(format!("Invalid clash core: {}", clash_core).into());

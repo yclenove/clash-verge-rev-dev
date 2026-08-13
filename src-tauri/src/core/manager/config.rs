@@ -367,7 +367,7 @@ impl CoreManager {
             Type::Core,
             "通过 mihomo API 应用配置失败，将重启核心以应用，错误: {err}"
         );
-        match self.restart_core().await {
+        match self.restart_core_during_config_update().await {
             Ok(_) => {
                 logging!(info, Type::Core, "重启后配置已应用");
                 Ok(())
