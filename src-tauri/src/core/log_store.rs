@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet, VecDeque, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{
         Arc, Mutex as StdMutex, OnceLock,
         atomic::{AtomicBool, Ordering},
@@ -23,6 +23,8 @@ const FLUSH_INTERVAL: Duration = Duration::from_millis(100);
 const RETENTION_PRUNE_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 const DEFAULT_RETENTION_DAYS: i64 = 7;
 const RAW_TRAFFIC_RETENTION_DAYS: i64 = 3;
+const DEFAULT_MAX_DB_BYTES: u64 = 200 * 1024 * 1024;
+const SIZE_CAP_DELETE_BATCH: i64 = 20;
 const MAX_QUERY_LIMIT: i64 = 1_001;
 
 static LOG_STORE: OnceLock<Arc<SqliteLogStore>> = OnceLock::new();
@@ -113,6 +115,8 @@ pub struct SqliteLogStore {
     queue: StdMutex<VecDeque<LogEntry>>,
     notify: Notify,
     retention_days: i64,
+    max_db_bytes: u64,
+    db_path: PathBuf,
     service_snapshot_imported: AtomicBool,
 }
 
@@ -341,7 +345,7 @@ fn log_partition_table(level: &str) -> &'static str {
         "debug" => "logs_debug",
         "info" => "logs_info",
         "warning" => "logs_warning",
-        "error" => "logs_error",
+        "error" | "fatal" | "critical" => "logs_error",
         _ => "logs_other",
     }
 }
@@ -428,8 +432,91 @@ fn reconcile_log_id_sequence(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn should_persist_log_level(level: &str) -> bool {
+    matches!(
+        normalize_stored_log_level(level).as_str(),
+        "warning" | "error" | "fatal" | "critical"
+    )
+}
+
+fn sqlite_sidecar_bytes(path: &Path) -> u64 {
+    let mut total = std::fs::metadata(path).map(|meta| meta.len()).unwrap_or(0);
+    let wal = PathBuf::from(format!("{}-wal", path.display()));
+    let shm = PathBuf::from(format!("{}-shm", path.display()));
+    total += std::fs::metadata(&wal).map(|meta| meta.len()).unwrap_or(0);
+    total += std::fs::metadata(&shm).map(|meta| meta.len()).unwrap_or(0);
+    total
+}
+
+fn sqlite_used_bytes(conn: &Connection) -> Result<u64> {
+    let page_count: i64 = conn.query_row("PRAGMA page_count", [], |row| row.get(0))?;
+    let page_size: i64 = conn.query_row("PRAGMA page_size", [], |row| row.get(0))?;
+    let freelist: i64 = conn.query_row("PRAGMA freelist_count", [], |row| row.get(0))?;
+    Ok(((page_count - freelist).max(0) as u64) * (page_size.max(0) as u64))
+}
+
+fn purge_non_persisted_levels(conn: &Connection) -> Result<usize> {
+    let mut deleted = 0usize;
+    deleted += conn.execute("DELETE FROM logs_debug", [])?;
+    deleted += conn.execute("DELETE FROM logs_info", [])?;
+    deleted += conn.execute("DELETE FROM logs_other", [])?;
+    Ok(deleted)
+}
+
+fn delete_oldest_log_batch(conn: &Connection, limit: i64) -> Result<usize> {
+    let mut deleted = 0usize;
+    for table in ["logs_warning", "logs_error"] {
+        deleted += conn.execute(
+            &format!("DELETE FROM {table} WHERE id IN (SELECT id FROM {table} ORDER BY ts ASC, id ASC LIMIT ?1)"),
+            params![limit],
+        )?;
+    }
+    Ok(deleted)
+}
+
+fn delete_oldest_connection_batch(conn: &Connection, limit: i64) -> Result<usize> {
+    Ok(conn.execute(
+        "DELETE FROM connections WHERE connection_id IN (
+            SELECT connection_id FROM connections ORDER BY last_seen_at ASC, started_at ASC LIMIT ?1
+         )",
+        params![limit],
+    )?)
+}
+
+fn reclaim_sqlite_space(conn: &Connection) -> Result<()> {
+    conn.execute_batch("PRAGMA incremental_vacuum; PRAGMA wal_checkpoint(TRUNCATE);")?;
+    Ok(())
+}
+
+fn enforce_size_cap_on_conn(conn: &Connection, path: &Path, max_db_bytes: u64) -> Result<()> {
+    if max_db_bytes == 0 {
+        return Ok(());
+    }
+    for _ in 0..1024 {
+        if sqlite_used_bytes(conn)? <= max_db_bytes {
+            break;
+        }
+        let mut deleted = delete_oldest_log_batch(conn, SIZE_CAP_DELETE_BATCH)?;
+        if deleted == 0 {
+            deleted = delete_oldest_connection_batch(conn, SIZE_CAP_DELETE_BATCH)?;
+        }
+        if deleted == 0 {
+            break;
+        }
+    }
+    reclaim_sqlite_space(conn)?;
+    if sqlite_sidecar_bytes(path) > max_db_bytes {
+        conn.execute_batch("VACUUM")?;
+    }
+    Ok(())
+}
+
 impl SqliteLogStore {
     pub fn open(path: &Path, retention_days: i64) -> Result<Arc<Self>> {
+        Self::open_with_limits(path, retention_days, DEFAULT_MAX_DB_BYTES)
+    }
+
+    pub fn open_with_limits(path: &Path, retention_days: i64, max_db_bytes: u64) -> Result<Arc<Self>> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).context("create log db parent dir")?;
         }
@@ -515,6 +602,8 @@ impl SqliteLogStore {
                 .context("backfill aggregated traffic tables")?;
         }
         schema_tx.commit().context("commit sqlite log schema migration")?;
+        purge_non_persisted_levels(&writer).context("purge verbose sqlite logs")?;
+        enforce_size_cap_on_conn(&writer, path, max_db_bytes).context("enforce sqlite log size cap")?;
 
         let store = Arc::new(Self {
             writer: Mutex::new(writer),
@@ -522,6 +611,8 @@ impl SqliteLogStore {
             queue: StdMutex::new(VecDeque::with_capacity(LOG_QUEUE_CAP)),
             notify: Notify::new(),
             retention_days: retention_days.max(1),
+            max_db_bytes,
+            db_path: path.to_path_buf(),
             service_snapshot_imported: AtomicBool::new(false),
         });
         let worker_store = store.clone();
@@ -532,6 +623,9 @@ impl SqliteLogStore {
     }
 
     pub fn push(&self, entry: LogEntry) {
+        if !should_persist_log_level(&entry.level) {
+            return;
+        }
         let mut queue = self.queue.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if queue.len() >= LOG_QUEUE_CAP {
             queue.pop_front();
@@ -547,6 +641,10 @@ impl SqliteLogStore {
     }
 
     async fn flush(&self, entries: Vec<LogEntry>) -> Result<()> {
+        let entries: Vec<LogEntry> = entries
+            .into_iter()
+            .filter(|entry| should_persist_log_level(&entry.level))
+            .collect();
         if entries.is_empty() {
             return Ok(());
         }
@@ -571,7 +669,14 @@ impl SqliteLogStore {
             params![next_id],
         )?;
         tx.commit()?;
+        enforce_size_cap_on_conn(&conn, &self.db_path, self.max_db_bytes)?;
         Ok(())
+    }
+
+    #[cfg(test)]
+    pub async fn enforce_size_cap(&self) -> Result<()> {
+        let conn = self.writer.lock().await;
+        enforce_size_cap_on_conn(&conn, &self.db_path, self.max_db_bytes)
     }
 
     async fn run_worker(&self) {
@@ -616,7 +721,8 @@ impl SqliteLogStore {
             params![detail_cutoff],
         )?;
         tx.commit()?;
-        conn.execute_batch("PRAGMA incremental_vacuum(256)")?;
+        count += purge_non_persisted_levels(&conn)?;
+        enforce_size_cap_on_conn(&conn, &self.db_path, self.max_db_bytes)?;
         Ok(count)
     }
 
@@ -761,21 +867,33 @@ impl SqliteLogStore {
             }
             batch.push(parse_sidecar_line(line, source));
             if batch.len() >= LOG_BATCH_MAX {
-                count += batch.len();
-                self.flush(batch).await?;
+                let persistable: Vec<LogEntry> = batch
+                    .into_iter()
+                    .filter(|entry| should_persist_log_level(&entry.level))
+                    .collect();
+                count += persistable.len();
+                self.flush(persistable).await?;
                 batch = Vec::with_capacity(LOG_BATCH_MAX);
             }
         }
         if !batch.is_empty() {
-            count += batch.len();
-            self.flush(batch).await?;
+            let persistable: Vec<LogEntry> = batch
+                .into_iter()
+                .filter(|entry| should_persist_log_level(&entry.level))
+                .collect();
+            count += persistable.len();
+            self.flush(persistable).await?;
         }
         Ok(count)
     }
 
     pub async fn ingest_log_entries(&self, entries: Vec<LogEntry>) -> Result<usize> {
-        let count = entries.len();
-        self.flush(entries).await?;
+        let persistable: Vec<LogEntry> = entries
+            .into_iter()
+            .filter(|entry| should_persist_log_level(&entry.level))
+            .collect();
+        let count = persistable.len();
+        self.flush(persistable).await?;
         Ok(count)
     }
 
@@ -833,14 +951,22 @@ impl SqliteLogStore {
                 }
                 batch.push(parse_sidecar_line(line, "core"));
                 if batch.len() >= LOG_BATCH_MAX {
-                    count += batch.len();
-                    self.flush(batch).await?;
+                    let persistable: Vec<LogEntry> = batch
+                        .into_iter()
+                        .filter(|entry| should_persist_log_level(&entry.level))
+                        .collect();
+                    count += persistable.len();
+                    self.flush(persistable).await?;
                     batch = Vec::with_capacity(LOG_BATCH_MAX);
                 }
             }
             if !batch.is_empty() {
-                count += batch.len();
-                self.flush(batch).await?;
+                let persistable: Vec<LogEntry> = batch
+                    .into_iter()
+                    .filter(|entry| should_persist_log_level(&entry.level))
+                    .collect();
+                count += persistable.len();
+                self.flush(persistable).await?;
             }
             let conn = self.writer.lock().await;
             conn.execute(
@@ -1423,6 +1549,44 @@ mod tests {
         (dir, path)
     }
 
+    #[test]
+    fn persists_only_warning_error_and_fatal_levels() {
+        assert!(should_persist_log_level("warning"));
+        assert!(should_persist_log_level("warn"));
+        assert!(should_persist_log_level("error"));
+        assert!(should_persist_log_level("err"));
+        assert!(should_persist_log_level("fatal"));
+        assert!(should_persist_log_level("critical"));
+        assert!(!should_persist_log_level("info"));
+        assert!(!should_persist_log_level("debug"));
+        assert!(!should_persist_log_level("unknown"));
+    }
+
+    #[tokio::test]
+    async fn drops_verbose_levels_and_caps_database_file() {
+        let (_dir, path) = temp_db();
+        let cap = 2 * 1024 * 1024;
+        let store = SqliteLogStore::open_with_limits(&path, 7, cap).unwrap();
+        let bulky = "x".repeat(32 * 1024);
+        let entries = (0..100)
+            .map(|i| LogEntry::new(1_000 + i, "warning", "core", format!("{i}-{bulky}")))
+            .collect::<Vec<_>>();
+        store.ingest_log_entries(entries).await.unwrap();
+        store.enforce_size_cap().await.unwrap();
+
+        let remaining = store
+            .query(&LogQuery {
+                from_ts: Some(0),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert!(!remaining.is_empty());
+        assert!(remaining.len() < 100);
+        let db_bytes = sqlite_sidecar_bytes(&path);
+        assert!(db_bytes <= cap + 128 * 1024, "db grew to {db_bytes} bytes");
+    }
+
     #[tokio::test]
     async fn insert_query_prune_roundtrip() {
         let (_dir, path) = temp_db();
@@ -1440,9 +1604,9 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(logs.len(), 2);
+        assert_eq!(logs.len(), 1);
         assert_eq!(logs[0].level, "warning");
-        assert_eq!(logs[1].level, "info");
+        assert_eq!(logs[0].payload, "boom");
 
         store.prune_expired().await.unwrap();
         let logs = store
@@ -1525,12 +1689,11 @@ mod tests {
             .unwrap();
 
         let conn = store.reader.lock().await;
-        for table in LOG_PARTITION_TABLES {
-            let count = conn
-                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get::<_, i64>(0))
-                .unwrap();
-            assert_eq!(count, 1, "unexpected row count in {table}");
-        }
+        let counts = LOG_PARTITION_TABLES.map(|table| {
+            conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get::<_, i64>(0))
+                .unwrap()
+        });
+        assert_eq!(counts, [0, 0, 1, 1, 0]);
     }
 
     #[tokio::test]
@@ -1584,23 +1747,23 @@ mod tests {
         let store = SqliteLogStore::open(&path, 7).unwrap();
         let entries = (1..=1002)
             .map(|ts| {
-                let level = if ts == 1002 { "warn" } else { "info" };
+                let level = if ts == 1002 { "error" } else { "warning" };
                 LogEntry::new(ts, level, "core", format!("line {ts}"))
             })
             .collect();
         store.ingest_log_entries(entries).await.unwrap();
 
-        let warning = store
+        let error = store
             .query_page(&LogQuery {
-                level: Some("warning".into()),
+                level: Some("error".into()),
                 descending: Some(true),
                 ..Default::default()
             })
             .await
             .unwrap();
-        assert_eq!(warning.total, 1);
-        assert_eq!(warning.entries.len(), 1);
-        assert_eq!(warning.entries[0].payload, "line 1002");
+        assert_eq!(error.total, 1);
+        assert_eq!(error.entries.len(), 1);
+        assert_eq!(error.entries[0].payload, "line 1002");
 
         let first = store
             .query_page(&LogQuery {
@@ -1631,13 +1794,13 @@ mod tests {
     async fn detects_existing_service_log_overlap() {
         let (_dir, path) = temp_db();
         let store = SqliteLogStore::open(&path, 7).unwrap();
-        let existing = LogEntry::new(1_700_000_000_000, "info", "core", "existing line");
+        let existing = LogEntry::new(1_700_000_000_000, "warning", "core", "existing line");
         store.ingest_log_entries(vec![existing.clone()]).await.unwrap();
 
         assert!(store.contains_log_entry(&existing).await.unwrap());
         assert!(
             !store
-                .contains_log_entry(&LogEntry::new(existing.ts, "info", "core", "different line",))
+                .contains_log_entry(&LogEntry::new(existing.ts, "warning", "core", "different line",))
                 .await
                 .unwrap()
         );
@@ -2073,7 +2236,7 @@ mod tests {
         let store = SqliteLogStore::open(&path, 7).unwrap();
         store.push(LogEntry::new(
             1_000_000_000_000,
-            "info",
+            "warning",
             "core",
             "[TCP] 127.0.0.1:50000(firefox.exe) --> api.example.com:443 match Match using JMS",
         ));
