@@ -16,19 +16,27 @@ const PROCESS_MAP = {
   arm64: 'arm64',
 }
 const arch = target ? ARCH_MAP[target] : PROCESS_MAP[process.arch]
+
+function resolveReleaseDir(targetTriple) {
+  const candidates = []
+  if (targetTriple) {
+    candidates.push(`./target/${targetTriple}/release`, `./src-tauri/target/${targetTriple}/release`)
+  }
+  candidates.push('./target/release', './src-tauri/target/release')
+  const found = candidates.find((dir) => fs.existsSync(path.join(dir, 'clash-verge.exe')))
+  if (!found) {
+    throw new Error(`could not found the release dir (tried ${candidates.join(', ')})`)
+  }
+  return found
+}
+
 /// Script for ci
 /// 打包绿色版/便携版 (only Windows)
 async function resolvePortable() {
   if (process.platform !== 'win32') return
 
-  const releaseDir = target
-    ? `./src-tauri/target/${target}/release`
-    : `./src-tauri/target/release`
+  const releaseDir = resolveReleaseDir(target)
   const configDir = path.join(releaseDir, '.config')
-
-  if (!fs.existsSync(releaseDir)) {
-    throw new Error('could not found the release dir')
-  }
 
   await fsp.mkdir(configDir, { recursive: true })
   if (!fs.existsSync(path.join(configDir, 'PORTABLE'))) {

@@ -1,0 +1,84 @@
+name: Windows x64 Package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+  HUSKY: 0
+
+concurrency:
+  group: windows-x64-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-x64:
+    name: Build Windows x64 NSIS and portable
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.95.0'
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: 'v1-rust'
+          key: 'windows-x64-package'
+          workspaces: |
+            . -> target
+          cache-all-crates: true
+          cache-workspace-crates: true
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.18.0'
+          cache: 'pnpm'
+
+      - name: Install dependencies and sidecars
+        run: |
+          pnpm i
+          pnpm run prebuild x86_64-pc-windows-msvc
+
+      - name: Tauri build
+        uses: tauri-apps/tauri-action@v1
+        env:
+          NODE_OPTIONS: '--max_old_space_size=4096'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: pnpm
+          args: --target x86_64-pc-windows-msvc -b nsis
+          includeUpdaterJson: false
+
+      - name: Build portable zip
+        run: pnpm portable x86_64-pc-windows-msvc
+
+      - name: Upload NSIS installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: Clash.Verge-windows-x64-setup
+          path: target/x86_64-pc-windows-msvc/release/bundle/nsis/*setup.exe
+          if-no-files-found: error
+
+      - name: Upload portable zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: Clash.Verge-windows-x64-portable
+          path: Clash.Verge_*_x64_portable.zip
+          if-no-files-found: error
