@@ -1,4 +1,4 @@
-﻿{
+{
   "identifier": "desktop-capability",
   "platforms": ["macOS", "windows", "linux"],
   "webviews": ["main"],
@@ -9,9 +9,7 @@
     "dialog:default",
     "dialog:allow-ask",
     "dialog:allow-message",
-    "updater:default",
-    "updater:allow-check",
-    "updater:allow-download-and-install",
+
     "deep-link:default",
     "autostart:allow-enable",
     "autostart:allow-disable",
