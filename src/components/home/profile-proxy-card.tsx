@@ -25,7 +25,6 @@ import {
   alpha,
   useTheme,
 } from '@mui/material'
-import { writeText } from '@/services/clipboard'
 import { useLockFn } from 'ahooks'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -60,6 +59,7 @@ import {
   useProxiesData,
 } from '@/providers/app-data-context'
 import { getIpInfo } from '@/services/api'
+import { writeText } from '@/services/clipboard'
 import delayManager from '@/services/delay'
 import { showNotice } from '@/services/notice-service'
 import { useQuery } from '@/services/query-client'
@@ -504,7 +504,7 @@ export const ProfileProxyCard = ({
   )
 
   // Restore Auto preference when group changes.
-  // URLTest without a fixed node defaults to Auto on.
+  // Default is off when no saved key, including URLTest groups.
   useEffect(() => {
     if (!selectedGroupName || isGlobalMode || isDirectMode) {
       setAutoMode(false)
@@ -513,17 +513,9 @@ export const ProfileProxyCard = ({
     const saved = readProfileScopedItem(
       `${STORAGE_KEY_AUTO}:${selectedGroupName}`,
     )
-    const urlTestDefault =
-      selectedGroup?.type === 'URLTest' && !selectedGroup.fixed
-    const enabled = saved == null ? !!urlTestDefault : saved === '1'
+    const enabled = saved === '1'
     setAutoMode(enabled)
-  }, [
-    isDirectMode,
-    isGlobalMode,
-    readProfileScopedItem,
-    selectedGroup,
-    selectedGroupName,
-  ])
+  }, [isDirectMode, isGlobalMode, readProfileScopedItem, selectedGroupName])
 
   // Scoped to the subscription, not to a group: the threshold gates a
   // subscription update, which is not a per-group decision.

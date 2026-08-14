@@ -25,6 +25,7 @@ import {
 } from '@/providers/app-data-context'
 import { updateProfile } from '@/services/cmds'
 import delayManager from '@/services/delay'
+import { ensureBackgroundLogAlertMonitor } from '@/services/log-alert-monitor'
 import {
   getHighSeverityAlertCount,
   resetHighSeverityAlerts,
@@ -124,6 +125,23 @@ export const useLogAlertAutoRecoveryMonitor = () => {
     const parsed = saved == null ? Number.NaN : Number(saved)
     attemptedAtRef.current = Number.isFinite(parsed) && parsed > 0 ? parsed : 0
   }, [profileId])
+
+  const clashMode = clashConfig?.mode?.toLowerCase()
+  const currentGroupName = readProfileScopedItem(STORAGE_KEY_GROUP, profileId)
+  const currentGroup =
+    currentGroupName &&
+    proxyView &&
+    clashMode !== 'direct' &&
+    clashMode !== 'global'
+      ? (proxyView.groups.find((group) => group.name === currentGroupName) ??
+        null)
+      : null
+  const currentGroupAutoOn = readAutoModeForGroup(profileId, currentGroup)
+
+  useEffect(() => {
+    if (!currentGroupAutoOn) return
+    ensureBackgroundLogAlertMonitor()
+  }, [currentGroupAutoOn, currentGroupName, profileId])
 
   useEffect(() => {
     let cancelled = false
