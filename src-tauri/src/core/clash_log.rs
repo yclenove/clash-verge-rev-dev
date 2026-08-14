@@ -87,7 +87,8 @@ mod tests {
         let logs = buffer.get_logs().await;
         assert!(logs.iter().any(|line| line.contains("level=warning")));
 
-        for i in LOGS_QUEUE_LEN..LOGS_QUEUE_LEN + 50 {
+        // Warning sits at index 50; evicting it requires 51 additional lines.
+        for i in LOGS_QUEUE_LEN..LOGS_QUEUE_LEN + 51 {
             buffer.append_log(CompactString::from(format!("line {i}"))).await;
         }
 
