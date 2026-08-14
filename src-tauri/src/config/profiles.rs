@@ -336,7 +336,9 @@ impl IProfiles {
     /// delete item
     /// Always returns true for remote/local deletions so runtime can rebuild with multi-sub merge.
     /// (Previously only returned true when deleting the current profile.)
-    pub async fn delete_item(&mut self, uid: &String) -> Result<bool> {
+    ///
+    /// Memory-only: collects files to unlink later. Does not touch disk or save yaml.
+    pub async fn delete_item(&mut self, uid: &String) -> Result<(bool, Vec<String>)> {
         let current = self.current.as_ref().unwrap_or(uid);
         let current = current.clone();
         let delete_uids = {
@@ -355,10 +357,10 @@ impl IProfiles {
             })
         };
         let mut items = self.items.take().unwrap_or_default();
+        let mut files = Vec::new();
 
-        // remove the main item (if exists) and delete its file
         if let Some(file) = Self::take_item_file_by_uid(&mut items, Some(uid.as_str())) {
-            let _ = dirs::app_profiles_dir()?.join(file.as_str()).remove_if_exists().await;
+            files.push(file);
         }
 
         for delete_uid in delete_uids {
@@ -374,7 +376,7 @@ impl IProfiles {
                 })
             });
             if !still_referenced && let Some(file) = Self::take_item_file_by_uid(&mut items, delete_uid_str) {
-                let _ = dirs::app_profiles_dir()?.join(file.as_str()).remove_if_exists().await;
+                files.push(file);
             }
         }
 
@@ -390,9 +392,8 @@ impl IProfiles {
         }
 
         self.items = Some(items);
-        self.save_file().await?;
         // Always refresh runtime: multi-sub merge includes every remote/local profile.
-        Ok(true)
+        Ok((true, files))
     }
 
     /// 获取current指向的订阅内容
@@ -623,7 +624,15 @@ pub async fn profiles_patch_item_safe(index: &String, item: &PrfItem) -> Result<
         .await
 }
 
-pub async fn profiles_delete_item_safe(index: &String) -> Result<bool> {
+pub async fn unlink_profile_files(files: &[String]) -> Result<()> {
+    let dir = dirs::app_profiles_dir()?;
+    for file in files {
+        let _ = dir.join(file.as_str()).remove_if_exists().await;
+    }
+    Ok(())
+}
+
+pub async fn profiles_delete_item_safe(index: &String) -> Result<(bool, Vec<String>)> {
     Config::profiles()
         .await
         .with_data_modify(|mut profiles| async move {
@@ -1559,5 +1568,94 @@ mod tests {
                 ("first-group".into(), "replacement".into()),
             ]
         );
+    }
+
+    fn profile_item(uid: &str, itype: &str, file: &str) -> PrfItem {
+        PrfItem {
+            uid: Some(uid.into()),
+            itype: Some(itype.into()),
+            file: Some(file.into()),
+            ..PrfItem::default()
+        }
+    }
+
+    fn profile_with_merge(uid: &str, file: &str, merge: &str) -> PrfItem {
+        PrfItem {
+            uid: Some(uid.into()),
+            itype: Some("remote".into()),
+            file: Some(file.into()),
+            option: Some(PrfOption {
+                merge: Some(merge.into()),
+                ..PrfOption::default()
+            }),
+            ..PrfItem::default()
+        }
+    }
+
+    fn merge_item(uid: &str, file: &str) -> PrfItem {
+        PrfItem {
+            uid: Some(uid.into()),
+            itype: Some("merge".into()),
+            file: Some(file.into()),
+            ..PrfItem::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn delete_item_collects_files_and_leaves_items_in_memory() {
+        let mut profiles = IProfiles {
+            current: Some("keep".into()),
+            items: Some(vec![
+                profile_item("keep", "remote", "Rkeep.yaml"),
+                profile_item("gone", "remote", "Rgone.yaml"),
+            ]),
+        };
+
+        let (should_update, files) = profiles.delete_item(&String::from("gone")).await.unwrap();
+
+        assert!(should_update);
+        assert_eq!(files, vec![String::from("Rgone.yaml")]);
+        assert!(profiles.get_item("gone").is_err());
+        assert!(profiles.get_item("keep").is_ok());
+        assert_eq!(profiles.current.as_deref(), Some("keep"));
+    }
+
+    #[tokio::test]
+    async fn delete_item_collects_unreferenced_chain_files() {
+        let mut profiles = IProfiles {
+            current: Some("main".into()),
+            items: Some(vec![
+                profile_with_merge("main", "Rmain.yaml", "merge-1"),
+                merge_item("merge-1", "mmerge.yaml"),
+            ]),
+        };
+
+        let (_should_update, files) = profiles.delete_item(&String::from("main")).await.unwrap();
+
+        assert_eq!(
+            files,
+            vec![String::from("Rmain.yaml"), String::from("mmerge.yaml")]
+        );
+        assert!(profiles.get_item("main").is_err());
+        assert!(profiles.get_item("merge-1").is_err());
+        assert!(profiles.current.is_none());
+    }
+
+    #[tokio::test]
+    async fn delete_item_keeps_shared_chain_item() {
+        let mut profiles = IProfiles {
+            current: Some("first".into()),
+            items: Some(vec![
+                profile_with_merge("first", "Rfirst.yaml", "shared-merge"),
+                profile_with_merge("second", "Rsecond.yaml", "shared-merge"),
+                merge_item("shared-merge", "mshared.yaml"),
+            ]),
+        };
+
+        let (_should_update, files) = profiles.delete_item(&String::from("first")).await.unwrap();
+
+        assert_eq!(files, vec![String::from("Rfirst.yaml")]);
+        assert!(profiles.get_item("shared-merge").is_ok());
+        assert_eq!(profiles.current.as_deref(), Some("second"));
     }
 }

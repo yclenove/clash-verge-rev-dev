@@ -7,7 +7,7 @@ use crate::{
         Config, IProfiles, PrfItem, PrfOption,
         profiles::{
             profiles_append_item_with_filedata_safe, profiles_delete_item_safe, profiles_patch_item_safe,
-            profiles_reorder_safe, profiles_save_file_safe,
+            profiles_reorder_safe, profiles_save_file_safe, unlink_profile_files,
         },
         profiles_append_item_safe,
     },
@@ -150,42 +150,63 @@ pub async fn update_profile(index: String, option: Option<PrfOption>) -> CmdResu
     }
 }
 
-/// 删除配置文件
-#[tauri::command]
-pub async fn delete_profile(index: String) -> CmdResult {
-    // 使用Send-safe helper函数
-    let should_update = profiles_delete_item_safe(&index)
+async fn restore_profiles_from_disk() -> anyhow::Result<()> {
+    Config::profiles()
         .await
-        .with_error_code("PROFILE_DELETE_FAILED")?;
-    profiles_save_file_safe()
+        .with_data_modify(|_| async { Ok((IProfiles::new().await, ())) })
         .await
-        .with_error_code("PROFILE_DELETE_FAILED")?;
+}
+
+async fn refresh_profile_tray() {
     if let Err(e) = Tray::global().update_tooltip().await {
         logging!(warn, Type::Cmd, "Warning: 异步更新托盘提示失败: {e}");
     }
-
     if let Err(e) = Tray::global().update_menu().await {
         logging!(warn, Type::Cmd, "Warning: 异步更新托盘菜单失败: {e}");
     }
+}
+
+/// 删除配置文件
+#[tauri::command]
+pub async fn delete_profile(index: String) -> CmdResult {
+    let (should_update, files) = profiles_delete_item_safe(&index)
+        .await
+        .with_error_code("PROFILE_DELETE_FAILED")?;
+
     if should_update {
         match CoreManager::global().update_config_forced().await {
             Ok(outcome) if outcome.is_valid() => {
                 handle::Handle::refresh_clash();
-                // 发送配置变更通知
                 logging!(info, Type::Cmd, "[删除订阅] 发送配置变更通知: {}", index);
                 handle::Handle::notify_profile_changed(&index);
             }
             Ok(outcome) => {
                 logging!(warn, Type::Cmd, "删除订阅后更新配置失败: {}", outcome);
+                if let Err(restore_err) = restore_profiles_from_disk().await {
+                    logging!(error, Type::Cmd, "删除订阅失败后回滚内存失败: {restore_err}");
+                }
                 handle_validation_notice(&outcome, ValidationNoticeTarget::Runtime, "运行时配置");
+                refresh_profile_tray().await;
                 return Err(coded_error("PROFILE_DELETE_FAILED", outcome));
             }
             Err(e) => {
                 logging!(error, Type::Cmd, "{}", e);
+                if let Err(restore_err) = restore_profiles_from_disk().await {
+                    logging!(error, Type::Cmd, "删除订阅失败后回滚内存失败: {restore_err}");
+                }
+                refresh_profile_tray().await;
                 return Err(coded_error("PROFILE_DELETE_FAILED", e));
             }
         }
     }
+
+    unlink_profile_files(&files)
+        .await
+        .with_error_code("PROFILE_DELETE_FAILED")?;
+    profiles_save_file_safe()
+        .await
+        .with_error_code("PROFILE_DELETE_FAILED")?;
+    refresh_profile_tray().await;
     Timer::global()
         .refresh()
         .await
