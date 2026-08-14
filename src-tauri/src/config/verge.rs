@@ -157,6 +157,9 @@ pub struct IVerge {
     /// 启动时随机化混合代理端口（避免端口冲突）
     pub enable_random_port: Option<bool>,
 
+    /// 将其它订阅节点合并进当前配置。默认关闭。
+    pub enable_merge_other_profiles: Option<bool>,
+
     /// 默认的延迟测试连接
     pub default_latency_test: Option<String>,
 
@@ -452,6 +455,7 @@ impl IVerge {
             auto_close_connection: Some(true),
             auto_check_update: Some(false),
             enable_random_port: Some(false),
+            enable_merge_other_profiles: Some(false),
             enable_builtin_enhanced: Some(true),
             auto_log_clean: Some(2), // 1: 1天, 2: 7天, 3: 30天, 4: 90天
             enable_auto_backup_schedule: Some(false),
@@ -553,6 +557,7 @@ impl IVerge {
         patch!(auto_close_connection);
         patch!(auto_check_update);
         patch!(enable_random_port);
+        patch!(enable_merge_other_profiles);
         patch!(default_latency_test);
         patch!(default_latency_timeout);
         patch!(enable_auto_delay_detection);

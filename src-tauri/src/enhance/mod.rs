@@ -851,38 +851,45 @@ async fn merge_other_profiles(mut config: Mapping) -> Mapping {
         config.insert(Value::from("proxies"), Value::Sequence(new_proxies));
     }
 
-    // 将新增节点加入所有 selector 类型的 proxy-group
-    if !new_names.is_empty()
-        && let Some(Value::Sequence(groups)) = config.get_mut(Value::from("proxy-groups"))
-    {
-        for group in groups.iter_mut() {
-            if let Value::Mapping(map) = group {
-                let is_selector = map
-                    .get(Value::from("type"))
-                    .and_then(Value::as_str)
-                    .map(|t| {
-                        let t = t.to_ascii_lowercase();
-                        t == "select" || t == "selector" || t == "urltest" || t == "url-test" || t == "url_test"
-                    })
-                    .unwrap_or(false);
-                if is_selector {
-                    // 确保 proxies 字段存在（空的 selector 组也注入节点）
-                    if map.get(Value::from("proxies")).is_none() {
-                        map.insert(Value::from("proxies"), Value::Sequence(vec![]));
-                    }
-                    if let Some(Value::Sequence(group_proxies)) = map.get_mut(Value::from("proxies")) {
-                        for name in &new_names {
-                            if !group_proxies.contains(name) {
-                                group_proxies.push(name.clone());
-                            }
-                        }
-                    }
+    // 将新增节点加入 selector 类型的 proxy-group（默认不写入 url-test）
+    if !new_names.is_empty() {
+        inject_merged_names_into_groups(&mut config, &new_names, false);
+    }
+
+    config
+}
+
+fn inject_merged_names_into_groups(
+    config: &mut Mapping,
+    new_names: &[Value],
+    include_urltest: bool,
+) {
+    let Some(Value::Sequence(groups)) = config.get_mut(Value::from("proxy-groups")) else {
+        return;
+    };
+    for group in groups.iter_mut() {
+        let Value::Mapping(map) = group else { continue };
+        let ty = map
+            .get(Value::from("type"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        let is_select = ty == "select" || ty == "selector";
+        let is_urltest = ty == "urltest" || ty == "url-test" || ty == "url_test";
+        if !is_select && !(include_urltest && is_urltest) {
+            continue;
+        }
+        if map.get(Value::from("proxies")).is_none() {
+            map.insert(Value::from("proxies"), Value::Sequence(vec![]));
+        }
+        if let Some(Value::Sequence(group_proxies)) = map.get_mut(Value::from("proxies")) {
+            for name in new_names {
+                if !group_proxies.contains(name) {
+                    group_proxies.push(name.clone());
                 }
             }
         }
     }
-
-    config
 }
 
 /// 从 verge 持久化配置中读取链式代理定义，并注入到当前配置。
@@ -1032,8 +1039,17 @@ pub async fn enhance() -> Result<(Mapping, HashSet<String>, HashMap<String, Resu
     let profile = collect_profile_items().await?;
     let config = profile.config;
 
-    // 多订阅合并：将所有订阅的节点合并到当前配置（恒开启）。
-    let config = merge_other_profiles(config).await;
+    // 多订阅合并：将所有订阅的节点合并到当前配置（默认关闭）。
+    let merge_enabled = Config::verge()
+        .await
+        .latest_arc()
+        .enable_merge_other_profiles
+        .unwrap_or(false);
+    let config = if merge_enabled {
+        merge_other_profiles(config).await
+    } else {
+        config
+    };
 
     let merge_item = profile.merge_item;
     let script_item = profile.script_item;
@@ -1595,8 +1611,8 @@ mod authoritative_field_tests {
 #[cfg(test)]
 mod tests {
     use super::{
-        ChainItem, ChainType, cleanup_proxy_groups, ensure_lan_bind_address, process_global_items,
-        process_profile_items, use_keys,
+        ChainItem, ChainType, cleanup_proxy_groups, ensure_lan_bind_address,
+        inject_merged_names_into_groups, process_global_items, process_profile_items, use_keys,
     };
     use std::collections::HashMap;
 
@@ -1989,5 +2005,29 @@ proxy-groups:
             .expect("proxies should be a sequence");
         assert_eq!(proxies.len(), 1);
         assert_eq!(proxies[0].as_str(), Some("DIRECT"));
+    }
+
+    #[test]
+    fn merged_names_skip_urltest_by_default() {
+        let mut config = mapping(
+            r#"
+proxy-groups:
+  - { name: PROXY, type: select, proxies: [a] }
+  - { name: AUTO, type: url-test, proxies: [a], url: http://www.gstatic.com/generate_204 }
+"#,
+        );
+        inject_merged_names_into_groups(
+            &mut config,
+            &[serde_yaml_ng::Value::from("other")],
+            false,
+        );
+        let groups = config
+            .get("proxy-groups")
+            .and_then(serde_yaml_ng::Value::as_sequence)
+            .unwrap();
+        let select = groups[0].as_mapping().unwrap();
+        let urltest = groups[1].as_mapping().unwrap();
+        assert!(select.get("proxies").unwrap().as_sequence().unwrap().iter().any(|v| v.as_str() == Some("other")));
+        assert!(!urltest.get("proxies").unwrap().as_sequence().unwrap().iter().any(|v| v.as_str() == Some("other")));
     }
 }
