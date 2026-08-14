@@ -17,6 +17,7 @@ use crate::utils::dirs;
 use crate::{
     config::{Config, IVerge, PrfItem},
     constants,
+    core::handle,
     utils::{help, tmpl},
 };
 use anyhow::{Context as _, Result};
@@ -175,10 +176,22 @@ async fn collect_profile_items() -> Result<ProfileItems> {
         }
     };
 
-    let current = profiles_arc
-        .current_mapping()
-        .await
-        .with_context(|| format!("failed to read current profile \"{current_profile_uid}\""))?;
+    let current = match profiles_arc.current_mapping().await {
+        Ok(mapping) => mapping,
+        Err(err) => {
+            let message = format!("{err:#}");
+            if message.contains("file not found") || message.contains("failed to find the current profile") {
+                logging!(
+                    warn,
+                    Type::Config,
+                    "failed to read current profile \"{current_profile_uid}\": {message}; skipping enhance"
+                );
+                handle::Handle::notice_message("config_validate::file_not_found", message);
+                return Ok(ProfileItems::default());
+            }
+            return Err(err).with_context(|| format!("failed to read current profile \"{current_profile_uid}\""));
+        }
+    };
 
     let current_item = match profiles_arc.get_item(&current_profile_uid) {
         Ok(item) => item,

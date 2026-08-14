@@ -5,7 +5,6 @@
   "windows": ["main"],
   "permissions": [
     "global-shortcut:default",
-    "updater:default",
     "dialog:default",
     "dialog:allow-ask",
     "dialog:allow-message",

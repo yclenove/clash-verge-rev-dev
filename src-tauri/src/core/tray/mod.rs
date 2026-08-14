@@ -57,6 +57,7 @@ enum IconKind {
 
 pub struct Tray {
     limiter: SystemLimiter,
+    update_lock: tokio::sync::Mutex<()>,
     #[cfg(target_os = "macos")]
     speed_controller: speed_task::TraySpeedController,
 }
@@ -130,6 +131,7 @@ impl Default for Tray {
     fn default() -> Self {
         Self {
             limiter: Limiter::new(Duration::from_millis(TRAY_CLICK_DEBOUNCE_MS), SystemClock),
+            update_lock: tokio::sync::Mutex::new(()),
             #[cfg(target_os = "macos")]
             speed_controller: speed_task::TraySpeedController::new(),
         }
@@ -150,7 +152,7 @@ impl Tray {
         }
 
         let app_handle = handle::Handle::app_handle();
-
+        let _guard = self.update_lock.lock().await;
         match self.create_tray_from_handle(app_handle).await {
             Ok(_) => {
                 logging!(info, Type::Tray, "系统托盘创建成功");
@@ -175,11 +177,13 @@ impl Tray {
         }
 
         let app_handle = handle::Handle::app_handle();
+        let _guard = self.update_lock.lock().await;
+        let tray = match self.ensure_tray(app_handle).await {
+            Some(tray) => tray,
+            None => return Ok(()),
+        };
         let tray_event = { Config::verge().await.latest_arc().tray_event.clone() };
         let tray_event = TrayAction::from(tray_event.as_deref().unwrap_or("main_window"));
-        let tray = app_handle
-            .tray_by_id(TRAY_ID)
-            .ok_or_else(|| anyhow::anyhow!("Failed to get main tray"))?;
         match tray_event {
             TrayAction::TrayMenu => tray.set_show_menu_on_left_click(true)?,
             _ => tray.set_show_menu_on_left_click(false)?,
@@ -194,12 +198,12 @@ impl Tray {
             return Ok(());
         }
         let app_handle = handle::Handle::app_handle();
+        let _guard = self.update_lock.lock().await;
         self.update_menu_internal(app_handle, true).await
     }
 
     async fn update_menu_internal(&self, app_handle: &AppHandle, include_proxy_groups: bool) -> Result<()> {
-        let Some(tray) = app_handle.tray_by_id(TRAY_ID) else {
-            logging!(warn, Type::Tray, "更新托盘菜单失败：未找到托盘");
+        let Some(tray) = self.ensure_tray(app_handle).await else {
             return Ok(());
         };
 
@@ -251,16 +255,13 @@ impl Tray {
             logging!(debug, Type::Tray, "应用正在退出，跳过托盘图标更新");
             return Ok(());
         }
+        let _guard = self.update_lock.lock().await;
+        self.update_icon_inner(verge).await
+    }
 
+    async fn update_icon_inner(&self, verge: &IVerge) -> Result<()> {
         let app_handle = handle::Handle::app_handle();
-
-        let Some(tray) = app_handle.tray_by_id(TRAY_ID) else {
-            logging!(warn, Type::Tray, "更新托盘图标失败：未找到托盘");
-            return Ok(());
-        };
-
         let (_is_custom_icon, icon_bytes) = TrayState::get_tray_icon(verge).await;
-
         let template = {
             #[cfg(target_os = "macos")]
             {
@@ -271,11 +272,58 @@ impl Tray {
                 false
             }
         };
-        let icon = Some(tauri::image::Image::from_bytes(&icon_bytes)?);
-
-        logging_error!(Type::Tray, tray.set_icon_with_as_template(icon, template));
-
+        self.apply_tray_icon(app_handle, &icon_bytes, template).await;
         Ok(())
+    }
+
+    async fn apply_tray_icon(&self, app_handle: &AppHandle, icon_bytes: &[u8], template: bool) {
+        const RETRY_DELAYS_MS: [u64; 3] = [200, 1000, 3000];
+        for (attempt, delay_ms) in RETRY_DELAYS_MS.iter().enumerate() {
+            if handle::Handle::global().is_exiting() {
+                return;
+            }
+            let Some(tray) = self.ensure_tray(app_handle).await else {
+                tokio::time::sleep(Duration::from_millis(*delay_ms)).await;
+                continue;
+            };
+            let icon = match tauri::image::Image::from_bytes(icon_bytes) {
+                Ok(icon) => icon,
+                Err(error) => {
+                    logging!(warn, Type::Tray, "tray icon decode failed: {error}");
+                    return;
+                }
+            };
+            match tray.set_icon_with_as_template(Some(icon), template) {
+                Ok(()) => return,
+                Err(error) if is_transient_tray_icon_error(&error) => {
+                    logging!(
+                        debug,
+                        Type::Tray,
+                        "transient tray icon update failed (attempt {}): {error}",
+                        attempt + 1
+                    );
+                    let _ = app_handle.remove_tray_by_id(TRAY_ID);
+                    tokio::time::sleep(Duration::from_millis(*delay_ms)).await;
+                }
+                Err(error) => {
+                    logging!(warn, Type::Tray, "tray icon update failed: {error}");
+                    return;
+                }
+            }
+        }
+        logging!(warn, Type::Tray, "tray icon update still failing after retries");
+    }
+
+    async fn ensure_tray(&self, app_handle: &AppHandle) -> Option<tauri::tray::TrayIcon> {
+        if let Some(tray) = app_handle.tray_by_id(TRAY_ID) {
+            return Some(tray);
+        }
+        logging!(info, Type::Tray, "tray missing; recreating");
+        if let Err(error) = self.create_tray_from_handle(app_handle).await {
+            logging!(warn, Type::Tray, "failed to recreate tray: {error}");
+            return None;
+        }
+        app_handle.tray_by_id(TRAY_ID)
     }
 
     /// 更新托盘提示
@@ -284,7 +332,11 @@ impl Tray {
             logging!(debug, Type::Tray, "应用正在退出，跳过托盘提示更新");
             return Ok(());
         }
+        let _guard = self.update_lock.lock().await;
+        self.update_tooltip_inner().await
+    }
 
+    async fn update_tooltip_inner(&self) -> Result<()> {
         let app_handle = handle::Handle::app_handle();
 
         let verge = Config::verge().await.latest_arc();
@@ -309,7 +361,6 @@ impl Tray {
             }
         }
 
-        // Get localized strings before using them
         let sys_proxy_text = clash_verge_i18n::t!("tray.tooltip.systemProxy");
         let tun_text = clash_verge_i18n::t!("tray.tooltip.tun");
         let profile_text = clash_verge_i18n::t!("tray.tooltip.profile");
@@ -331,12 +382,17 @@ impl Tray {
             current_profile_name
         );
 
-        let Some(tray) = app_handle.tray_by_id(TRAY_ID) else {
-            logging!(warn, Type::Tray, "更新托盘提示失败：未找到托盘");
+        let Some(tray) = self.ensure_tray(app_handle).await else {
             return Ok(());
         };
 
-        logging_error!(Type::Tray, tray.set_tooltip(Some(&tooltip)));
+        if let Err(error) = tray.set_tooltip(Some(&tooltip)) {
+            if is_transient_tray_icon_error(&error) {
+                logging!(debug, Type::Tray, "transient tray tooltip update failed: {error}");
+            } else {
+                logging!(warn, Type::Tray, "tray tooltip update failed: {error}");
+            }
+        }
 
         Ok(())
     }
@@ -348,21 +404,26 @@ impl Tray {
         }
         let verge = Config::verge().await.data_arc();
         let app_handle = handle::Handle::app_handle();
-        self.update_menu_internal(app_handle, false).await?;
+        {
+            let _guard = self.update_lock.lock().await;
+            self.update_menu_internal(app_handle, false).await?;
+            self.update_icon_inner(&verge).await?;
+            #[cfg(target_os = "macos")]
+            self.update_speed_task(verge.enable_tray_speed.unwrap_or(false));
+            self.update_tooltip_inner().await?;
+        }
         AsyncHandler::spawn(|| async {
             logging_error!(Type::Tray, Self::global().update_menu().await);
         });
-        self.update_icon(&verge).await?;
-        #[cfg(target_os = "macos")]
-        self.update_speed_task(verge.enable_tray_speed.unwrap_or(false));
-        self.update_tooltip().await?;
         Ok(())
     }
 
     pub async fn update_menu_and_icon(&self) {
-        logging_error!(Type::Tray, self.update_menu().await);
         let verge = Config::verge().await.data_arc();
-        logging_error!(Type::Tray, self.update_icon(&verge).await);
+        let _guard = self.update_lock.lock().await;
+        let app_handle = handle::Handle::app_handle();
+        logging_error!(Type::Tray, self.update_menu_internal(app_handle, true).await);
+        logging_error!(Type::Tray, self.update_icon_inner(&verge).await);
     }
 
     async fn create_tray_from_handle(&self, app_handle: &AppHandle) -> Result<()> {
@@ -372,6 +433,10 @@ impl Tray {
         }
 
         logging!(info, Type::Tray, "正在从AppHandle创建系统托盘");
+
+        if app_handle.tray_by_id(TRAY_ID).is_some() {
+            let _ = app_handle.remove_tray_by_id(TRAY_ID);
+        }
 
         let verge = Config::verge().await.data_arc();
 
@@ -1026,4 +1091,31 @@ fn on_menu_event(_: &AppHandle, event: MenuEvent) {
         // We dont expected to refresh tray state here
         // as the inner handle function (SHOULD) already takes care of it
     });
+}
+
+fn is_transient_tray_icon_error(error: &impl std::fmt::Display) -> bool {
+    let text = error.to_string();
+    let lower = text.to_ascii_lowercase();
+    text.contains("-2147467259")
+        || lower.contains("80004005")
+        || lower.contains("0x80004005")
+        || lower.contains("unspecified error")
+        || text.contains("E_FAIL")
+        || text.contains("未指定的错误")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_transient_tray_icon_error;
+
+    #[test]
+    fn detects_windows_efail_hresult() {
+        assert!(is_transient_tray_icon_error(
+            &"tray icon error: unspecified error (os error -2147467259)"
+        ));
+        assert!(is_transient_tray_icon_error(&"os error 0x80004005"));
+        assert!(is_transient_tray_icon_error(&"E_FAIL"));
+        assert!(is_transient_tray_icon_error(&"未指定的错误"));
+        assert!(!is_transient_tray_icon_error(&"Failed to get main tray"));
+    }
 }

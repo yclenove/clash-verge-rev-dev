@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::constants::timing;
 use crate::core::{CoreManager, handle, log_store};
 use crate::module::lightweight;
 use crate::utils;
@@ -230,7 +231,7 @@ pub async fn clean_async() -> CleanupResult {
     let result = run_interactive_cleanup_transition(
         || async {
             logging!(info, Type::System, "交互式退出或重启时正在停止核心");
-            persist_active_connections_best_effort(Duration::from_millis(750)).await;
+            persist_active_connections_best_effort(timing::PERSIST_CONNECTIONS_TIMEOUT).await;
             match CoreManager::global().stop_core().await {
                 Ok(()) => {
                     logging!(info, Type::Window, "交互式退出或重启时核心已停止");
@@ -272,7 +273,7 @@ pub async fn clean_session_ending_best_effort() -> CleanupResult {
     let result = run_session_ending_cleanup_transition(
         || async {
             logging!(info, Type::System, "会话结束尽力清理期间正在停止核心");
-            persist_active_connections_best_effort(Duration::from_millis(750)).await;
+            persist_active_connections_best_effort(timing::PERSIST_CONNECTIONS_TIMEOUT).await;
             match CoreManager::global().stop_core().await {
                 Ok(()) => {
                     logging!(info, Type::Window, "会话结束尽力清理期间核心已停止");

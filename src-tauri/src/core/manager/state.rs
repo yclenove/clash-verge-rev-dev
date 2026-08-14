@@ -1,6 +1,7 @@
 #[cfg(test)]
 use super::claim_core_readiness_generation;
 use super::{CoreManager, RunningMode};
+use crate::platform_plugins::shell::ShellExt as _;
 use crate::{
     AsyncHandler,
     config::Config,
@@ -16,7 +17,6 @@ use scopeguard::defer;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 use tauri_plugin_mihomo::MihomoExt as _;
-use crate::platform_plugins::shell::ShellExt as _;
 use tokio::fs;
 
 // Desktop sidecars come up quickly; OHOS NCP + large runtime yaml needs a longer window
@@ -100,6 +100,7 @@ async fn sync_service_logs(store: &log_store::SqliteLogStore) -> Result<()> {
                 .map(|line| log_store::parse_sidecar_line(line.as_str(), "core"))
                 .collect::<Vec<_>>();
             let overlaps_sqlite = match entries.first() {
+                Some(oldest) if oldest.ts < store.cleared_at() => true,
                 Some(oldest) => store.contains_log_entry(oldest).await?,
                 None => true,
             };

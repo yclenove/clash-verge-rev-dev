@@ -31,7 +31,7 @@ pub mod sysopt_android;
 #[cfg(target_env = "ohos")]
 pub mod sysopt_ohos;
 #[cfg(not(clash_verge_mobile))]
-pub use sysopt::Sysopt;
+pub(crate) use sysopt::Sysopt;
 #[cfg(all(clash_verge_mobile, not(target_env = "ohos")))]
 pub use sysopt_android::Sysopt;
 #[cfg(target_env = "ohos")]

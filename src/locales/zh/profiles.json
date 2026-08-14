@@ -47,6 +47,7 @@
         "profileSwitched": "已设为基准配置",
         "profileReactivated": "订阅已激活",
         "switchBusy": "正在切换订阅，请稍后重试",
+        "updateBusy": "已有配置更新进行中",
         "batchDeleted": "选中的订阅已成功删除"
       },
       "notices": {

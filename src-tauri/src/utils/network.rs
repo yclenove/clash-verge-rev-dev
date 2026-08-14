@@ -259,9 +259,7 @@ impl NetworkManager {
             ProxyType::System => {
                 #[cfg(not(clash_verge_mobile))]
                 {
-                    if let Ok(p @ Sysproxy { enable: true, .. }) =
-                        Sysproxy::get_system_proxy()
-                    {
+                    if let Ok(p @ Sysproxy { enable: true, .. }) = Sysproxy::get_system_proxy() {
                         Some(format!("http://{}:{}", p.host, p.port))
                     } else {
                         None

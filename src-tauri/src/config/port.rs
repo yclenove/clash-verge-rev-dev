@@ -5,6 +5,7 @@ use super::{
 use crate::{
     constants::timing,
     core::{
+        CoreManager,
         handle::Handle,
         listener::{ListenerBindScope, MIXED_PORT_KEY, proxy_listener_keys},
         owner_identity::current_owner_credentials,
@@ -12,7 +13,11 @@ use crate::{
         validate::CoreConfigValidator,
     },
     process::AsyncHandler,
-    utils::port::{MIN_FALLBACK_PORT, find_next_available_port},
+    utils::{
+        excluded_ports::system_excluded_port_ranges,
+        listen_owner::process_listens_on_port,
+        port::{MIN_FALLBACK_PORT, find_next_available_port},
+    },
 };
 use anyhow::{Context as _, Result, anyhow, bail};
 use clash_verge_draft::DraftTransaction;
@@ -57,8 +62,11 @@ impl Config {
             let reserved = configured_listener_ports(&clash, &verge);
             let seed = random_listener_port_seed();
             let random_scope = bind_scope.clone();
+            let excluded = system_excluded_port_ranges();
             if let Some(candidate) = AsyncHandler::spawn_blocking(move || {
-                find_next_available_port(seed, &reserved, |port| random_scope.mixed_port_is_available(port))
+                find_next_available_port(seed, &reserved, |port| {
+                    !excluded.contains(port) && random_scope.mixed_port_is_available(port)
+                })
             })
             .await
             .context("random mixed proxy port scan task failed")?
@@ -84,7 +92,7 @@ impl Config {
             }
         }
 
-        if owned_service_core_uses_port(selected_port).await {
+        if owned_core_uses_port(selected_port).await {
             logging!(
                 info,
                 Type::Setup,
@@ -94,10 +102,12 @@ impl Config {
             return Ok(false);
         }
 
+        let excluded = system_excluded_port_ranges();
         let selected_scope = bind_scope.clone();
-        let port_in_use = AsyncHandler::spawn_blocking(move || !selected_scope.mixed_port_is_available(selected_port))
-            .await
-            .context("mixed proxy port probe task failed")?;
+        let port_in_use = excluded.contains(selected_port)
+            || AsyncHandler::spawn_blocking(move || !selected_scope.mixed_port_is_available(selected_port))
+                .await
+                .context("mixed proxy port probe task failed")?;
         if !port_in_use {
             return Ok(false);
         }
@@ -105,7 +115,7 @@ impl Config {
         let reserved = configured_listener_ports(&clash, &verge);
         let candidate = AsyncHandler::spawn_blocking(move || {
             find_next_available_port(selected_port, &reserved, |port| {
-                bind_scope.mixed_port_is_available(port)
+                !excluded.contains(port) && bind_scope.mixed_port_is_available(port)
             })
         })
         .await
@@ -255,7 +265,16 @@ fn report_fallback_error(message: String) {
     });
 }
 
-// Only service-managed cores can survive into this startup phase; this app has not spawned its sidecar yet.
+// Only service-managed or sidecar cores can survive into this startup phase.
+async fn owned_core_uses_port(port: u16) -> bool {
+    if let Some(pid) = CoreManager::global().get_running_sidecar_pid()
+        && process_listens_on_port(pid, port)
+    {
+        return true;
+    }
+    owned_service_core_uses_port(port).await
+}
+
 async fn owned_service_core_uses_port(port: u16) -> bool {
     if !matches!(SERVICE_MANAGER.current().await, ServiceStatus::Ready) {
         return false;
@@ -289,6 +308,21 @@ async fn owned_service_core_uses_port(port: u16) -> bool {
     if response.code > 0 || !status.is_active || status.core_pid.is_none() {
         return false;
     }
+    let Some(core_pid) = status.core_pid else {
+        return false;
+    };
+    if process_listens_on_port(core_pid, port) {
+        return true;
+    }
+
+    if let Err(error) = point_mihomo_client_at_service_ipc() {
+        logging!(
+            warn,
+            Type::Service,
+            "Unable to point mihomo client at service IPC while checking mixed proxy port: {error:#}"
+        );
+        return false;
+    }
 
     match Handle::mihomo().get_base_config().await {
         Ok(config) => config.mixed_port == port,
@@ -297,11 +331,18 @@ async fn owned_service_core_uses_port(port: u16) -> bool {
                 warn,
                 Type::Service,
                 "Current user's service core is active but its mixed proxy port is unavailable: {error}; \
-                 preserving the selected port until core replacement resolves ownership"
+                 not assuming the configured port is still owned"
             );
-            true
+            false
         }
     }
+}
+
+fn point_mihomo_client_at_service_ipc() -> Result<()> {
+    let path = crate::utils::dirs::ipc_path()?;
+    Handle::mihomo()
+        .update_socket_path(crate::utils::dirs::path_to_str(&path)?.to_owned())
+        .map_err(|error| anyhow!("{error}"))
 }
 
 fn configured_listener_ports(clash: &IClashTemp, verge: &IVerge) -> HashSet<u16> {

@@ -180,6 +180,21 @@ export async function getClashLogs(query: ClashLogQuery = {}) {
   return invoke<ClashLogPage>('get_clash_logs', query)
 }
 
+export interface IncomingClashLog {
+  ts: number
+  level: string
+  source?: string
+  payload: string
+}
+
+export async function appendClashLogs(entries: IncomingClashLog[]) {
+  return invoke<number>('append_clash_logs', { entries })
+}
+
+export async function clearClashLogs() {
+  return invoke<number>('clear_clash_logs')
+}
+
 export interface ConnectionEntry {
   connection_id: string
   started_at: number

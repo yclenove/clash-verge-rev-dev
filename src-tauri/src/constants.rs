@@ -18,7 +18,10 @@ pub mod timing {
     use super::Duration;
 
     pub const CONFIG_UPDATE_DEBOUNCE: Duration = Duration::from_millis(300);
+    pub const CONFIG_UPDATE_BUSY_WAIT: Duration = Duration::from_secs(8);
+    pub const CONFIG_UPDATE_BUSY_POLL: Duration = Duration::from_millis(200);
     pub const STARTUP_ERROR_DELAY: Duration = Duration::from_secs(2);
+    pub const PERSIST_CONNECTIONS_TIMEOUT: Duration = Duration::from_millis(2000);
 
     // How long a re-asked staging request is worth waiting for. One that already landed answers in
     // milliseconds; anything slower means the Service is still working, so ReplaceCore beats waiting.

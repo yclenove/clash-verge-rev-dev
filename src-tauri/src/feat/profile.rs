@@ -226,7 +226,13 @@ pub async fn update_profile(
                 logging!(info, Type::Config, "[订阅更新] 更新成功");
                 handle::Handle::refresh_clash();
             }
-            Ok(outcome @ (ValidationOutcome::Skipped { .. } | ValidationOutcome::Busy)) if !is_mannual_trigger => {
+            Ok(ValidationOutcome::Busy) => {
+                logging!(info, Type::Config, "[订阅更新] 已有配置更新进行中，跳过本次刷新");
+                if is_mannual_trigger {
+                    handle::Handle::notice_message("update_busy", "");
+                }
+            }
+            Ok(outcome @ ValidationOutcome::Skipped { .. }) if !is_mannual_trigger => {
                 logging!(info, Type::Config, "[订阅更新] 本次配置刷新已跳过: {}", outcome);
             }
             Ok(outcome) => {

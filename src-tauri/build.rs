@@ -8,6 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let windows_msvc = target_os == "windows" && target_env == "msvc";
+    println!("cargo:rerun-if-env-changed=CV_EMBED_TEST_MANIFEST");
 
     // Tauri already embeds a Common-Controls v6 manifest into the app binary via
     // resource.lib. Unconditionally adding another /MANIFESTINPUT causes:
@@ -47,7 +48,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let manifest = manifest_path.display();
         println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
         println!("cargo:rustc-link-arg=/MANIFESTINPUT:{manifest}");
-        println!("cargo:rerun-if-env-changed=CV_EMBED_TEST_MANIFEST");
     }
 
     #[cfg(feature = "clippy")]

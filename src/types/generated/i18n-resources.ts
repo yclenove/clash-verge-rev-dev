@@ -502,6 +502,7 @@ export interface TranslationResources {
             profileReactivated: string
             profileSwitched: string
             switchBusy: string
+            updateBusy: string
           }
           tooltips: {
             forceRefreshStaleData: string

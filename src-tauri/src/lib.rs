@@ -98,10 +98,7 @@ mod app_init {
     /// Setup deep link handling
     #[cfg(not(target_env = "ohos"))]
     pub fn setup_deep_links(app: &tauri::App) {
-        #[cfg(any(
-            all(target_os = "linux", not(target_env = "ohos")),
-            all(debug_assertions, windows)
-        ))]
+        #[cfg(any(all(target_os = "linux", not(target_env = "ohos")), all(debug_assertions, windows)))]
         {
             logging!(info, Type::Setup, "注册深层链接...");
             let _ = app.deep_link().register_all();
@@ -216,6 +213,8 @@ mod app_init {
             cmd::get_dns_config_content,
             cmd::validate_dns_config,
             cmd::get_clash_logs,
+            cmd::append_clash_logs,
+            cmd::clear_clash_logs,
             cmd::save_connections,
             cmd::get_traffic_rank,
             cmd::get_traffic_totals,

@@ -18,7 +18,6 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   ArrowDownwardRounded,
   ArrowUpwardRounded,
-  DashboardOutlined,
   DragIndicatorRounded,
   HelpOutlineRounded,
   HistoryEduOutlined,
@@ -571,6 +570,58 @@ const HomePage = () => {
               </Button>
             </Tooltip>
           </Box>
+          {!isOhos && (
+            <Tooltip
+              title={t('home.components.proxyTun.tooltips.systemProxy')}
+              arrow
+            >
+              <Box
+                sx={(theme) => ({
+                  height: 30,
+                  pl: { xs: 0.25, sm: 1 },
+                  pr: 0.25,
+                  mr: 0.75,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  borderRadius: 1,
+                  bgcolor: systemProxyIndicator
+                    ? alpha(theme.palette.success.main, 0.08)
+                    : 'transparent',
+                  transition: 'background-color 0.2s',
+                })}
+              >
+                <Typography
+                  variant="body2"
+                  sx={{
+                    display: { xs: 'none', sm: 'block' },
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    color: systemProxyIndicator
+                      ? 'success.main'
+                      : 'text.secondary',
+                  }}
+                >
+                  {t('settings.sections.system.toggles.systemProxy')}
+                </Typography>
+                <Switch
+                  size="small"
+                  checked={systemProxyConfigState}
+                  disabled={systemProxyBusy}
+                  slotProps={{
+                    input: {
+                      'aria-label': t(
+                        'settings.sections.system.toggles.systemProxy',
+                      ),
+                    },
+                  }}
+                  onChange={(_, checked) =>
+                    void handleSystemProxyToggle(checked)
+                  }
+                />
+              </Box>
+            </Tooltip>
+          )}
           <Tooltip
             title={t('home.components.proxyTun.tooltips.dnsOverwrite')}
             arrow
@@ -624,66 +675,7 @@ const HomePage = () => {
     >
       <Grid container spacing={1} columns={{ xs: 6, sm: 6, md: 12 }}>
         <Grid size={12}>
-          <EnhancedCard
-            dense
-            title={t('home.page.cards.overview')}
-            icon={<DashboardOutlined />}
-            iconColor="primary"
-            noContentPadding
-            action={
-              isOhos ? null : (
-                <Tooltip
-                title={t('home.components.proxyTun.tooltips.systemProxy')}
-                arrow
-              >
-                <Box
-                  sx={(theme) => ({
-                    height: 30,
-                    pl: { xs: 0.25, sm: 1 },
-                    pr: 0.25,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.5,
-                    borderRadius: 1,
-                    bgcolor: systemProxyIndicator
-                      ? alpha(theme.palette.success.main, 0.08)
-                      : 'transparent',
-                    transition: 'background-color 0.2s',
-                  })}
-                >
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      display: { xs: 'none', sm: 'block' },
-                      fontWeight: 600,
-                      whiteSpace: 'nowrap',
-                      color: systemProxyIndicator
-                        ? 'success.main'
-                        : 'text.secondary',
-                    }}
-                  >
-                    {t('settings.sections.system.toggles.systemProxy')}
-                  </Typography>
-                  <Switch
-                    size="small"
-                    checked={systemProxyConfigState}
-                    disabled={systemProxyBusy}
-                    slotProps={{
-                      input: {
-                        'aria-label': t(
-                          'settings.sections.system.toggles.systemProxy',
-                        ),
-                      },
-                    }}
-                    onChange={(_, checked) =>
-                      void handleSystemProxyToggle(checked)
-                    }
-                  />
-                </Box>
-                </Tooltip>
-              )
-            }
-          >
+          <EnhancedCard dense hideHeader noContentPadding>
             {visibleSections.length === 0 ? (
               <Box sx={{ px: 1.5, py: 2 }}>
                 <Typography variant="body2" color="text.secondary">

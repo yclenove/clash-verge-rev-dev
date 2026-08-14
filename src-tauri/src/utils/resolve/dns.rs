@@ -1,8 +1,8 @@
 use clash_verge_logging::{Type, logging};
 
 pub async fn set_public_dns(dns_server: String) {
-    use crate::{core::handle, utils::dirs};
     use crate::platform_plugins::shell::ShellExt as _;
+    use crate::{core::handle, utils::dirs};
     let app_handle = handle::Handle::app_handle();
 
     logging!(info, Type::Config, "try to set system dns");
@@ -43,8 +43,8 @@ pub async fn set_public_dns(dns_server: String) {
 
 #[cfg(target_os = "macos")]
 pub async fn restore_public_dns() {
-    use crate::{core::handle, utils::dirs};
     use crate::platform_plugins::shell::ShellExt as _;
+    use crate::{core::handle, utils::dirs};
     let app_handle = handle::Handle::app_handle();
     logging!(info, Type::Config, "try to unset system dns");
     let resource_dir = match dirs::app_resources_dir() {

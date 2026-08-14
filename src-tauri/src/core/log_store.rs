@@ -11,7 +11,7 @@ use std::{
     path::Path,
     sync::{
         Arc, Mutex as StdMutex, OnceLock,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicI64, Ordering},
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -38,7 +38,7 @@ pub struct LogEntry {
 }
 
 impl LogEntry {
-    fn new(ts: i64, level: impl Into<String>, source: impl Into<String>, payload: impl Into<String>) -> Self {
+    pub(crate) fn new(ts: i64, level: impl Into<String>, source: impl Into<String>, payload: impl Into<String>) -> Self {
         Self {
             id: 0,
             ts,
@@ -114,6 +114,7 @@ pub struct SqliteLogStore {
     notify: Notify,
     retention_days: i64,
     service_snapshot_imported: AtomicBool,
+    cleared_at: AtomicI64,
 }
 
 const LOG_PARTITION_TABLES: [&str; 5] = ["logs_debug", "logs_info", "logs_warning", "logs_error", "logs_other"];
@@ -290,6 +291,12 @@ CREATE TABLE IF NOT EXISTS log_backfill_checkpoints (
   modified_ms INTEGER NOT NULL,
   size INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS log_clear_state (
+  singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+  cleared_at INTEGER NOT NULL
+);
+INSERT OR IGNORE INTO log_clear_state (singleton, cleared_at) VALUES (1, 0);
 ";
 
 fn now_ms() -> i64 {
@@ -516,6 +523,14 @@ impl SqliteLogStore {
         }
         schema_tx.commit().context("commit sqlite log schema migration")?;
 
+        let cleared_at_value: i64 = writer
+            .query_row(
+                "SELECT cleared_at FROM log_clear_state WHERE singleton = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
         let store = Arc::new(Self {
             writer: Mutex::new(writer),
             reader: Mutex::new(reader),
@@ -523,6 +538,7 @@ impl SqliteLogStore {
             notify: Notify::new(),
             retention_days: retention_days.max(1),
             service_snapshot_imported: AtomicBool::new(false),
+            cleared_at: AtomicI64::new(cleared_at_value),
         });
         let worker_store = store.clone();
         tokio::spawn(async move {
@@ -532,12 +548,19 @@ impl SqliteLogStore {
     }
 
     pub fn push(&self, entry: LogEntry) {
+        if entry.ts < self.cleared_at.load(Ordering::Acquire) {
+            return;
+        }
         let mut queue = self.queue.lock().unwrap();
         if queue.len() >= LOG_QUEUE_CAP {
             queue.pop_front();
         }
         queue.push_back(entry);
         self.notify.notify_one();
+    }
+
+    pub fn cleared_at(&self) -> i64 {
+        self.cleared_at.load(Ordering::Acquire)
     }
 
     fn drain_batch(&self, max: usize) -> Vec<LogEntry> {
@@ -551,11 +574,15 @@ impl SqliteLogStore {
             return Ok(());
         }
         let conn = self.writer.lock().await;
+        let cutoff = self.cleared_at.load(Ordering::Acquire);
         let tx = conn.unchecked_transaction()?;
         let mut next_id = tx.query_row("SELECT next_id FROM log_id_sequence WHERE singleton = 1", [], |row| {
             row.get::<_, i64>(0)
         })?;
         for entry in &entries {
+            if entry.ts < cutoff {
+                continue;
+            }
             let level = normalize_stored_log_level(&entry.level);
             let raw_hash = hash_raw(&entry.payload);
             let inserted = tx.execute(
@@ -776,6 +803,14 @@ impl SqliteLogStore {
     pub async fn ingest_log_entries(&self, entries: Vec<LogEntry>) -> Result<usize> {
         let count = entries.len();
         self.flush(entries).await?;
+        Ok(count)
+    }
+
+    pub async fn append_entries(&self, entries: Vec<LogEntry>) -> Result<usize> {
+        let cutoff = self.cleared_at.load(Ordering::Acquire);
+        let kept: Vec<_> = entries.into_iter().filter(|entry| entry.ts >= cutoff).collect();
+        let count = kept.len();
+        self.flush(kept).await?;
         Ok(count)
     }
 
@@ -1113,6 +1148,29 @@ impl SqliteLogStore {
         Ok(count)
     }
 
+    pub async fn clear_logs(&self) -> Result<usize> {
+        let now = now_ms();
+        let conn = self.writer.lock().await;
+        let tx = conn.unchecked_transaction()?;
+        let mut count = 0usize;
+        for table in LOG_PARTITION_TABLES {
+            count += tx.execute(&format!("DELETE FROM {table}"), [])?;
+        }
+        tx.execute(
+            "INSERT INTO log_clear_state (singleton, cleared_at) VALUES (1, ?1)
+             ON CONFLICT(singleton) DO UPDATE SET cleared_at = excluded.cleared_at",
+            params![now],
+        )?;
+        tx.commit()?;
+        self.cleared_at.store(now, Ordering::Release);
+        {
+            let mut queue = self.queue.lock().unwrap();
+            queue.retain(|entry| entry.ts >= now);
+        }
+        conn.execute_batch("PRAGMA incremental_vacuum(256)")?;
+        Ok(count)
+    }
+
     pub async fn traffic_rank(&self, from_ts: Option<i64>, to_ts: Option<i64>) -> Result<Vec<TrafficBucket>> {
         let mut sql = String::from(
             "SELECT MIN(day),
@@ -1386,7 +1444,7 @@ pub fn parse_sidecar_line(line: &str, source: &str) -> LogEntry {
         }
     }
 
-    LogEntry::new(now_ms(), "unknown", source, line.to_string())
+    LogEntry::new(0, "unknown", source, line.to_string())
 }
 
 fn parse_log_route(payload: &str) -> Option<(i64, String, String, i64)> {
@@ -1453,6 +1511,96 @@ mod tests {
             .await
             .unwrap();
         assert!(logs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn clear_logs_deletes_rows_and_blocks_old_reingest() {
+        let (_dir, path) = temp_db();
+        let store = SqliteLogStore::open(&path, 7).unwrap();
+        store
+            .ingest_log_entries(vec![
+                LogEntry::new(1000, "warning", "core", "old warn"),
+                LogEntry::new(2000, "error", "core", "old err"),
+                LogEntry::new(3000, "info", "core", "old info"),
+            ])
+            .await
+            .unwrap();
+        assert_eq!(
+            store
+                .query(&LogQuery {
+                    from_ts: Some(0),
+                    ..Default::default()
+                })
+                .await
+                .unwrap()
+                .len(),
+            3
+        );
+
+        let deleted = store.clear_logs().await.unwrap();
+        assert_eq!(deleted, 3);
+        assert!(store.cleared_at() > 0);
+        assert!(
+            store
+                .query(&LogQuery {
+                    from_ts: Some(0),
+                    ..Default::default()
+                })
+                .await
+                .unwrap()
+                .is_empty()
+        );
+
+        store
+            .append_entries(vec![
+                LogEntry::new(1000, "warning", "core", "old warn"),
+                LogEntry::new(store.cleared_at() - 1, "error", "core", "just before clear"),
+                LogEntry::new(store.cleared_at(), "warning", "core", "new warn"),
+            ])
+            .await
+            .unwrap();
+        let logs = store
+            .query(&LogQuery {
+                from_ts: Some(0),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].payload, "new warn");
+
+        store.push(LogEntry::new(1, "warning", "core", "too old to queue"));
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        assert_eq!(
+            store
+                .query(&LogQuery {
+                    from_ts: Some(0),
+                    ..Default::default()
+                })
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+
+        let cutoff = store.cleared_at();
+        drop(store);
+        let reopened = SqliteLogStore::open(&path, 7).unwrap();
+        assert_eq!(reopened.cleared_at(), cutoff);
+
+        reopened
+            .ingest_log_text("garbage line that has no timestamp\n", "core")
+            .await
+            .unwrap();
+        let after_garbage = reopened
+            .query(&LogQuery {
+                from_ts: Some(0),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(after_garbage.len(), 1);
+        assert_eq!(after_garbage[0].payload, "new warn");
     }
 
     #[tokio::test]

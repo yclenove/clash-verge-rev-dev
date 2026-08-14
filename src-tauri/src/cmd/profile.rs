@@ -263,6 +263,16 @@ async fn handle_validation_failure(
     outcome: ValidationOutcome,
     current_profile: Option<&String>,
 ) -> CmdResult<ValidationOutcome> {
+    if matches!(outcome, ValidationOutcome::Busy) {
+        logging!(
+            info,
+            Type::Cmd,
+            "configuration update already running; restoring previous profile"
+        );
+        discard_and_restore(current_profile).await?;
+        handle_validation_notice(&outcome, ValidationNoticeTarget::Runtime, "运行时配置");
+        return Ok(outcome);
+    }
     logging!(warn, Type::Cmd, "配置验证失败: {}", outcome);
     discard_and_restore(current_profile).await?;
     handle_validation_notice(&outcome, ValidationNoticeTarget::Runtime, "运行时配置");

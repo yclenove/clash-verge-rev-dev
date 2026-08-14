@@ -1,6 +1,6 @@
 {
   "identifier": "ohos-capability",
-  "description": "Minimal permissions for OpenHarmony first HAP",
+  "description": "Minimal permissions for OpenHarmony first HAP. Kept outside src-tauri/capabilities so Windows tauri_build does not validate OHOS-only plugin permissions.",
   "local": true,
   "windows": ["main"],
   "webviews": ["main"],
