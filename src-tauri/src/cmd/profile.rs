@@ -150,11 +150,33 @@ pub async fn update_profile(index: String, option: Option<PrfOption>) -> CmdResu
     }
 }
 
-async fn restore_profiles_from_disk() -> anyhow::Result<()> {
-    Config::profiles()
+async fn restore_profiles_snapshot(draft: &Draft<IProfiles>, snapshot: IProfiles) -> anyhow::Result<()> {
+    draft
+        .with_data_modify(|_| async { Ok((snapshot, ())) })
         .await
-        .with_data_modify(|_| async { Ok((IProfiles::new().await, ())) })
-        .await
+}
+
+/// Persist yaml first. Save failure restores the pre-delete snapshot and skips unlink.
+async fn persist_deleted_profile<Save, Unlink, Restore, SaveFut, UnlinkFut, RestoreFut>(
+    save: Save,
+    unlink: Unlink,
+    restore: Restore,
+) -> anyhow::Result<()>
+where
+    Save: FnOnce() -> SaveFut,
+    Unlink: FnOnce() -> UnlinkFut,
+    Restore: FnOnce() -> RestoreFut,
+    SaveFut: std::future::Future<Output = anyhow::Result<()>>,
+    UnlinkFut: std::future::Future<Output = anyhow::Result<()>>,
+    RestoreFut: std::future::Future<Output = anyhow::Result<()>>,
+{
+    if let Err(e) = save().await {
+        if let Err(restore_err) = restore().await {
+            logging!(error, Type::Cmd, "删除订阅失败后回滚内存失败: {restore_err}");
+        }
+        return Err(e);
+    }
+    unlink().await
 }
 
 async fn refresh_profile_tray() {
@@ -169,20 +191,18 @@ async fn refresh_profile_tray() {
 /// 删除配置文件
 #[tauri::command]
 pub async fn delete_profile(index: String) -> CmdResult {
+    let snapshot = (**Config::profiles().await.data_arc()).clone();
+
     let (should_update, files) = profiles_delete_item_safe(&index)
         .await
         .with_error_code("PROFILE_DELETE_FAILED")?;
 
     if should_update {
         match CoreManager::global().update_config_forced().await {
-            Ok(outcome) if outcome.is_valid() => {
-                handle::Handle::refresh_clash();
-                logging!(info, Type::Cmd, "[删除订阅] 发送配置变更通知: {}", index);
-                handle::Handle::notify_profile_changed(&index);
-            }
+            Ok(outcome) if outcome.is_valid() => {}
             Ok(outcome) => {
                 logging!(warn, Type::Cmd, "删除订阅后更新配置失败: {}", outcome);
-                if let Err(restore_err) = restore_profiles_from_disk().await {
+                if let Err(restore_err) = restore_profiles_snapshot(&Config::profiles().await, snapshot).await {
                     logging!(error, Type::Cmd, "删除订阅失败后回滚内存失败: {restore_err}");
                 }
                 handle_validation_notice(&outcome, ValidationNoticeTarget::Runtime, "运行时配置");
@@ -191,7 +211,7 @@ pub async fn delete_profile(index: String) -> CmdResult {
             }
             Err(e) => {
                 logging!(error, Type::Cmd, "{}", e);
-                if let Err(restore_err) = restore_profiles_from_disk().await {
+                if let Err(restore_err) = restore_profiles_snapshot(&Config::profiles().await, snapshot).await {
                     logging!(error, Type::Cmd, "删除订阅失败后回滚内存失败: {restore_err}");
                 }
                 refresh_profile_tray().await;
@@ -200,12 +220,20 @@ pub async fn delete_profile(index: String) -> CmdResult {
         }
     }
 
-    unlink_profile_files(&files)
-        .await
-        .with_error_code("PROFILE_DELETE_FAILED")?;
-    profiles_save_file_safe()
-        .await
-        .with_error_code("PROFILE_DELETE_FAILED")?;
+    persist_deleted_profile(
+        profiles_save_file_safe,
+        || unlink_profile_files(&files),
+        move || async move { restore_profiles_snapshot(&Config::profiles().await, snapshot).await },
+    )
+    .await
+    .with_error_code("PROFILE_DELETE_FAILED")?;
+
+    if should_update {
+        handle::Handle::refresh_clash();
+        logging!(info, Type::Cmd, "[删除订阅] 发送配置变更通知: {}", index);
+        handle::Handle::notify_profile_changed(&index);
+    }
+
     refresh_profile_tray().await;
     Timer::global()
         .refresh()
@@ -481,13 +509,16 @@ pub async fn get_next_update_time(uid: String) -> CmdResult<Option<i64>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{commit_current_profile, run_profile_config_update_transition};
+    use super::{
+        commit_current_profile, persist_deleted_profile, restore_profiles_snapshot,
+        run_profile_config_update_transition,
+    };
     use crate::config::{IProfiles, PrfItem};
     use crate::core::validate::ValidationOutcome;
     use clash_verge_draft::Draft;
     use std::{
         sync::{
-            Arc,
+            Arc, Mutex,
             atomic::{AtomicBool, Ordering},
         },
         task::Poll,
@@ -513,6 +544,97 @@ mod tests {
             uid: Some(uid.into()),
             ..PrfItem::default()
         }
+    }
+
+    #[tokio::test]
+    async fn restore_writes_back_pre_delete_snapshot_instead_of_empty_default() -> anyhow::Result<()> {
+        let draft = Draft::new(IProfiles {
+            current: Some("keep".into()),
+            items: Some(vec![profile("keep"), profile("gone")]),
+        });
+        let snapshot = (**draft.data_arc()).clone();
+
+        draft
+            .with_data_modify(|mut committed| async move {
+                committed.items = Some(vec![profile("keep")]);
+                Ok((committed, ()))
+            })
+            .await?;
+
+        restore_profiles_snapshot(&draft, snapshot).await?;
+
+        let restored = draft.data_arc();
+        assert_eq!(restored.current.as_deref(), Some("keep"));
+        assert!(restored.get_item("keep").is_ok());
+        assert!(restored.get_item("gone").is_ok());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn persist_saves_yaml_before_unlink_and_skips_unlink_when_save_fails() -> anyhow::Result<()> {
+        let order = Arc::new(Mutex::new(Vec::new()));
+
+        let result = persist_deleted_profile(
+            {
+                let order = Arc::clone(&order);
+                move || async move {
+                    order.lock().expect("order").push("save");
+                    Err(anyhow::anyhow!("save failed"))
+                }
+            },
+            {
+                let order = Arc::clone(&order);
+                move || async move {
+                    order.lock().expect("order").push("unlink");
+                    Ok(())
+                }
+            },
+            {
+                let order = Arc::clone(&order);
+                move || async move {
+                    order.lock().expect("order").push("restore");
+                    Ok(())
+                }
+            },
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(*order.lock().expect("order"), ["save", "restore"]);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn persist_unlinks_only_after_successful_save() -> anyhow::Result<()> {
+        let order = Arc::new(Mutex::new(Vec::new()));
+
+        persist_deleted_profile(
+            {
+                let order = Arc::clone(&order);
+                move || async move {
+                    order.lock().expect("order").push("save");
+                    Ok(())
+                }
+            },
+            {
+                let order = Arc::clone(&order);
+                move || async move {
+                    order.lock().expect("order").push("unlink");
+                    Ok(())
+                }
+            },
+            {
+                let order = Arc::clone(&order);
+                move || async move {
+                    order.lock().expect("order").push("restore");
+                    Ok(())
+                }
+            },
+        )
+        .await?;
+
+        assert_eq!(*order.lock().expect("order"), ["save", "unlink"]);
+        Ok(())
     }
 
     #[tokio::test]
