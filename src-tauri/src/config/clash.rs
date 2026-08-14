@@ -170,8 +170,15 @@ impl IClashTemp {
         config.insert("port".into(), port.into());
         config.insert("external-controller".into(), ctrl.into());
 
-        if config.get("find-process-mode").is_none() {
-            config.insert("find-process-mode".into(), "strict".into());
+        let mode = config
+            .get("find-process-mode")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_owned());
+        match mode.as_deref() {
+            None | Some("always") => {
+                config.insert("find-process-mode".into(), "strict".into());
+            }
+            _ => {}
         }
 
         #[cfg(all(unix, not(target_env = "ohos")))]
@@ -439,6 +446,37 @@ fn test_clash_info() {
     assert_eq!(get_case(8888, "192.168.1.1:8080"), get_result(8888, "192.168.1.1:8080"));
 
     assert_eq!(get_case(8888, "192.168.1.1:80800"), get_result(8888, "127.0.0.1:9097"));
+}
+
+#[cfg(test)]
+mod find_process_mode_guard {
+    use super::*;
+
+    fn find_process_mode(config: &Mapping) -> Option<&str> {
+        config.get("find-process-mode").and_then(|v| v.as_str())
+    }
+
+    #[test]
+    fn migrates_legacy_always_to_strict() {
+        let mut map = Mapping::new();
+        map.insert("find-process-mode".into(), "always".into());
+        let guarded = IClashTemp::guard(map);
+        assert_eq!(find_process_mode(&guarded), Some("strict"));
+    }
+
+    #[test]
+    fn inserts_strict_when_key_is_missing() {
+        let guarded = IClashTemp::guard(Mapping::new());
+        assert_eq!(find_process_mode(&guarded), Some("strict"));
+    }
+
+    #[test]
+    fn keeps_user_written_off() {
+        let mut map = Mapping::new();
+        map.insert("find-process-mode".into(), "off".into());
+        let guarded = IClashTemp::guard(map);
+        assert_eq!(find_process_mode(&guarded), Some("off"));
+    }
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
