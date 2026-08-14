@@ -60,6 +60,7 @@ import {
 } from '@/components/home/enhanced-canvas-traffic-graph'
 import { TrafficErrorBoundary } from '@/components/shared/traffic-error-boundary'
 import {
+  ensureBackgroundConnectionIngest,
   flushConnectionHistory,
   useConnectionData,
 } from '@/hooks/use-connection-data'
@@ -1017,6 +1018,10 @@ const TrafficPage = () => {
 
   const upColor = theme.palette.secondary.main
   const downColor = theme.palette.primary.main
+
+  useEffect(() => {
+    ensureBackgroundConnectionIngest()
+  }, [])
 
   useEffect(() => {
     if (rankView !== 'history' || !pageVisible || paused) return

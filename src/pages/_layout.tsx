@@ -47,15 +47,11 @@ import {
   WindowControls,
   WindowResizeHandles,
 } from '@/components/layout/window-controller'
-import { ensureBackgroundConnectionIngest } from '@/hooks/use-connection-data'
 import { useI18n } from '@/hooks/use-i18n'
 import { useLogAlertAutoRecoveryMonitor } from '@/hooks/use-log-alert-auto-recovery-monitor'
 import { useVerge } from '@/hooks/use-verge'
 import { useWindowDecorations } from '@/hooks/use-window'
-import {
-  ensureBackgroundLogAlertMonitor,
-  setLogAlertMonitorPaused,
-} from '@/services/log-alert-monitor'
+import { setLogAlertMonitorPaused } from '@/services/log-alert-monitor'
 import {
   clearLogAlertUnread,
   getLogAlertUnreadCount,
@@ -274,11 +270,6 @@ const Layout = () => {
   useLayoutEvents(handleNotice)
 
   useLogAlertAutoRecoveryMonitor()
-
-  useEffect(() => {
-    ensureBackgroundConnectionIngest()
-    ensureBackgroundLogAlertMonitor()
-  }, [])
 
   useEffect(() => {
     if (language) {

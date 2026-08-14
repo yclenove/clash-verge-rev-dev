@@ -532,7 +532,7 @@ impl SqliteLogStore {
     }
 
     pub fn push(&self, entry: LogEntry) {
-        let mut queue = self.queue.lock().unwrap();
+        let mut queue = self.queue.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if queue.len() >= LOG_QUEUE_CAP {
             queue.pop_front();
         }
@@ -541,7 +541,7 @@ impl SqliteLogStore {
     }
 
     fn drain_batch(&self, max: usize) -> Vec<LogEntry> {
-        let mut queue = self.queue.lock().unwrap();
+        let mut queue = self.queue.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let take = queue.len().min(max);
         queue.drain(..take).collect()
     }

@@ -55,8 +55,7 @@ const readAutoModeForGroup = (
     `${STORAGE_KEY_AUTO}:${group.name}`,
     profileId,
   )
-  const urlTestDefault = group.type === 'URLTest' && !group.fixed
-  return saved == null ? !!urlTestDefault : saved === '1'
+  return saved === '1'
 }
 
 const readAlertThreshold = (profileId: string | null): number => {
