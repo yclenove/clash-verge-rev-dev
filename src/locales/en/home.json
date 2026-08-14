@@ -4,7 +4,19 @@
       "lightweightMode": "Lightweight Mode",
       "manual": "Manual",
       "openPortSettings": "Open port settings",
-      "settings": "Home Settings"
+      "settings": "Home Settings",
+      "updateSubscriptions": "Update subscriptions",
+      "updateSubscriptionsEmpty": "No remote subscriptions to update"
+    },
+    "actions": {
+      "updateSubscriptions": "Update subscriptions"
+    },
+    "feedback": {
+      "notifications": {
+        "subscriptionsUpdated": "Subscriptions updated",
+        "subscriptionsPartial": "Updated {{succeeded}} subscription(s), {{failed}} failed",
+        "noRemoteSubscriptions": "No remote subscriptions to update"
+      }
     },
     "proxyServiceAddress": "Proxy service",
     "cards": {

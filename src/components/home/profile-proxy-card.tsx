@@ -25,7 +25,6 @@ import {
   alpha,
   useTheme,
 } from '@mui/material'
-import { writeText } from '@/services/clipboard'
 import { useLockFn } from 'ahooks'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -60,6 +59,7 @@ import {
   useProxiesData,
 } from '@/providers/app-data-context'
 import { getIpInfo } from '@/services/api'
+import { writeText } from '@/services/clipboard'
 import delayManager from '@/services/delay'
 import { showNotice } from '@/services/notice-service'
 import { useQuery } from '@/services/query-client'
@@ -1192,7 +1192,7 @@ export const ProfileProxyCard = ({
           <Box
             sx={{
               display: 'flex',
-              alignItems: 'flex-start',
+              alignItems: 'stretch',
               justifyContent: 'space-between',
               p: dense ? 0.75 : 1,
               mb: dense ? 1 : 2,
@@ -1201,7 +1201,7 @@ export const ProfileProxyCard = ({
               border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
             }}
           >
-            <Box>
+            <Box sx={{ minWidth: 0, flex: 1, pr: 1 }}>
               <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
                 {currentProxy?.name ??
                   t('home.components.currentProxy.labels.noActiveNode')}
@@ -1315,56 +1315,66 @@ export const ProfileProxyCard = ({
               </Box>
             </Box>
 
-            {/* 显示延迟 */}
-            {currentProxy && !isDirectMode && (
-              <Chip
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-end',
+                justifyContent: 'space-between',
+                gap: 1,
+                flexShrink: 0,
+                ml: 1.5,
+                minHeight: '100%',
+              }}
+            >
+              {currentProxy && !isDirectMode ? (
+                <Chip
+                  size="small"
+                  label={delayManager.formatDelay(currentDelay)}
+                  color={convertDelayColor(currentDelay)}
+                />
+              ) : (
+                <Box />
+              )}
+              <ToggleButtonGroup
+                exclusive
                 size="small"
-                label={delayManager.formatDelay(currentDelay)}
-                color={convertDelayColor(currentDelay)}
-              />
-            )}
+                value={selectedSubscriptionUid}
+                onChange={(_, value: string | null) => {
+                  if (!value) return
+                  handleSubscriptionChange(value)
+                }}
+                disabled={isDirectMode || subscriptions.length === 0}
+                sx={{
+                  flexWrap: 'wrap',
+                  justifyContent: 'flex-end',
+                  '& .MuiToggleButton-root': {
+                    px: 1,
+                    py: 0.35,
+                    textTransform: 'none',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                  },
+                }}
+              >
+                <ToggleButton value={SUBSCRIPTION_FILTER_ALL}>
+                  {t('home.components.currentProxy.labels.allNodes')}
+                </ToggleButton>
+                {subscriptions.map((subscription) => (
+                  <ToggleButton key={subscription.uid} value={subscription.uid}>
+                    <Typography
+                      noWrap
+                      component="span"
+                      sx={{ fontSize: 12, fontWeight: 600 }}
+                    >
+                      {subscription.name}
+                    </Typography>
+                  </ToggleButton>
+                ))}
+              </ToggleButtonGroup>
+            </Box>
           </Box>
-
-          {/* subscription chips: 全部节点 / BWH / HK ... */}
-          <ToggleButtonGroup
-            exclusive
-            fullWidth
-            size="small"
-            value={selectedSubscriptionUid}
-            onChange={(_, value: string | null) => {
-              if (!value) return
-              handleSubscriptionChange(value)
-            }}
-            disabled={isDirectMode || subscriptions.length === 0}
-            sx={{
-              mb: 1.25,
-              flexWrap: 'wrap',
-              '& .MuiToggleButton-root': {
-                flex: '1 1 auto',
-                minWidth: 0,
-                px: 1,
-                py: 0.5,
-                textTransform: 'none',
-                fontSize: 12,
-                fontWeight: 600,
-              },
-            }}
-          >
-            <ToggleButton value={SUBSCRIPTION_FILTER_ALL}>
-              {t('home.components.currentProxy.labels.allNodes')}
-            </ToggleButton>
-            {subscriptions.map((subscription) => (
-              <ToggleButton key={subscription.uid} value={subscription.uid}>
-                <Typography
-                  noWrap
-                  component="span"
-                  sx={{ fontSize: 12, fontWeight: 600 }}
-                >
-                  {subscription.name}
-                </Typography>
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
 
           <Box
             sx={{
@@ -1375,13 +1385,13 @@ export const ProfileProxyCard = ({
               px: 0.25,
             }}
           >
-            <Typography variant="body2" color="text.secondary">
-              {t('home.components.currentProxy.labels.autoMode')}
-            </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                {t('home.components.currentProxy.labels.autoMode')}
+              </Typography>
               <Tooltip
                 title={t('home.components.currentProxy.tooltips.autoMode')}
-                placement="left"
+                placement="top"
               >
                 <FormControlLabel
                   sx={{ mr: 0 }}
@@ -1403,7 +1413,8 @@ export const ProfileProxyCard = ({
                   labelPlacement="start"
                 />
               </Tooltip>
-
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Tooltip
                 title={t(
                   'home.components.currentProxy.tooltips.autoLogAlertThreshold',
@@ -1416,7 +1427,6 @@ export const ProfileProxyCard = ({
                     display: 'flex',
                     alignItems: 'center',
                     gap: 0.5,
-                    pl: 1,
                   }}
                 >
                   <Typography

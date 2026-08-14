@@ -4,7 +4,19 @@
       "lightweightMode": "轻量模式",
       "manual": "使用手册",
       "openPortSettings": "点击打开端口设置",
-      "settings": "首页设置"
+      "settings": "首页设置",
+      "updateSubscriptions": "更新订阅",
+      "updateSubscriptionsEmpty": "没有可更新的远程订阅"
+    },
+    "actions": {
+      "updateSubscriptions": "更新订阅"
+    },
+    "feedback": {
+      "notifications": {
+        "subscriptionsUpdated": "订阅已更新",
+        "subscriptionsPartial": "已更新 {{succeeded}} 个订阅，{{failed}} 个失败",
+        "noRemoteSubscriptions": "没有可更新的远程订阅"
+      }
     },
     "proxyServiceAddress": "代理服务地址",
     "cards": {

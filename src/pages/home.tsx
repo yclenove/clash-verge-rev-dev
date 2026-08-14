@@ -1,41 +1,10 @@
-import {
-  closestCenter,
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core'
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import {
-  ArrowDownwardRounded,
-  ArrowUpwardRounded,
-  DragIndicatorRounded,
-  HelpOutlineRounded,
-  HistoryEduOutlined,
-  RestartAltRounded,
-  SettingsEthernetRounded,
-  SettingsOutlined,
-} from '@mui/icons-material'
+import { RefreshRounded, SettingsEthernetRounded } from '@mui/icons-material'
 import {
   Box,
   Button,
-  Checkbox,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
+  CircularProgress,
   Divider,
   Grid,
-  IconButton,
   Skeleton,
   Tooltip,
   Typography,
@@ -62,10 +31,12 @@ import { ClashPortViewer } from '@/components/setting/mods/clash-port-viewer'
 import { DnsViewer } from '@/components/setting/mods/dns-viewer'
 import { useClash } from '@/hooks/use-clash'
 import { useDisplayedMixedPort } from '@/hooks/use-displayed-mixed-port'
+import { useProfiles } from '@/hooks/use-profiles'
 import { useSystemProxyState } from '@/hooks/use-system-proxy-state'
 import { useVerge } from '@/hooks/use-verge'
-import { entry_lightweight_mode, openWebUrl } from '@/services/cmds'
+import { useAppRefreshers } from '@/providers/app-data-context'
 import { showNotice } from '@/services/notice-service'
+import { updateRemoteProfiles } from '@/services/update-remote-profiles'
 import getSystem from '@/utils/get-system'
 import { formatHostPort } from '@/utils/network'
 
@@ -94,12 +65,6 @@ const DEFAULT_HOME_CARDS: HomeCardsSettings = {
   network: true,
   systeminfo: true,
 }
-
-const serializeCardFlags = (cards: HomeCardsSettings) =>
-  Object.keys(cards)
-    .sort()
-    .map((key) => `${key}:${cards[key] ? 1 : 0}`)
-    .join('|')
 
 // 首页区块元信息（key → i18n 标签），默认顺序与初始渲染顺序一致
 interface HomeCardMeta {
@@ -141,248 +106,12 @@ const resolveCardOrder = (stored: string[] | undefined): string[] => {
   return resolved
 }
 
-// 可排序的区块设置行：拖动手柄排序 + 复选框开关 + 上移/下移按钮
-interface SortableCardRowProps {
-  id: string
-  label: string
-  checked: boolean
-  isFirst: boolean
-  isLast: boolean
-  onToggle: () => void
-  onMoveUp: () => void
-  onMoveDown: () => void
-}
-
-const SortableCardRow = ({
-  id,
-  label,
-  checked,
-  isFirst,
-  isLast,
-  onToggle,
-  onMoveUp,
-  onMoveDown,
-}: SortableCardRowProps) => {
-  const { t } = useTranslation()
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id })
-
-  return (
-    <Box
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 0.5,
-        px: 1,
-        py: 0.5,
-        mb: 0.75,
-        borderRadius: 1.5,
-        border: '1px solid transparent',
-        transition: 'background-color 0.2s, border-color 0.2s, box-shadow 0.2s',
-        '&:hover': {
-          bgcolor: 'action.hover',
-          borderColor: 'divider',
-          '& .drag-handle': { color: 'primary.main' },
-        },
-        ...(isDragging
-          ? {
-              opacity: 0.92,
-              zIndex: 1,
-              bgcolor: 'action.selected',
-              borderColor: 'primary.main',
-              boxShadow: (theme) =>
-                `0 4px 16px ${alpha(theme.palette.primary.main, 0.25)}`,
-            }
-          : {}),
-      }}
-    >
-      <Box
-        component="span"
-        className="drag-handle"
-        {...attributes}
-        {...listeners}
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          color: 'text.disabled',
-          cursor: 'grab',
-          transition: 'color 0.2s',
-          '&:active': { cursor: 'grabbing' },
-        }}
-      >
-        <DragIndicatorRounded fontSize="small" />
-      </Box>
-      <Checkbox
-        size="small"
-        checked={checked}
-        onChange={onToggle}
-        sx={{ p: 0.5 }}
-      />
-      <Typography
-        sx={{
-          flex: 1,
-          fontSize: 14,
-          userSelect: 'none',
-          opacity: checked ? 1 : 0.55,
-          transition: 'opacity 0.2s',
-        }}
-      >
-        {label}
-      </Typography>
-      <Tooltip title={t('home.page.settings.tooltips.moveUp')}>
-        <span>
-          <IconButton size="small" onClick={onMoveUp} disabled={isFirst}>
-            <ArrowUpwardRounded sx={{ fontSize: 16 }} />
-          </IconButton>
-        </span>
-      </Tooltip>
-      <Tooltip title={t('home.page.settings.tooltips.moveDown')}>
-        <span>
-          <IconButton size="small" onClick={onMoveDown} disabled={isLast}>
-            <ArrowDownwardRounded sx={{ fontSize: 16 }} />
-          </IconButton>
-        </span>
-      </Tooltip>
-    </Box>
-  )
-}
-
-// 首页设置对话框组件接口
-interface HomeSettingsDialogProps {
-  onClose: () => void
-  homeCards: HomeCardsSettings
-  homeCardsOrder: string[]
-}
-
-// 首页设置对话框组件
-const HomeSettingsDialog = ({
-  onClose,
-  homeCards,
-  homeCardsOrder,
-}: HomeSettingsDialogProps) => {
-  const { t } = useTranslation()
-  const [cards, setCards] = useState<HomeCardsSettings>(homeCards)
-  const [order, setOrder] = useState<string[]>(homeCardsOrder)
-  const { patchVerge } = useVerge()
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  )
-
-  const handleToggle = (key: string) => {
-    setCards((prev: HomeCardsSettings) => ({
-      ...prev,
-      [key]: !prev[key],
-    }))
-  }
-
-  const moveCard = (index: number, target: number) => {
-    setOrder((prev) => arrayMove(prev, index, target))
-  }
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    setOrder((prev) => {
-      const oldIndex = prev.indexOf(String(active.id))
-      const newIndex = prev.indexOf(String(over.id))
-      if (oldIndex === -1 || newIndex === -1) return prev
-      return arrayMove(prev, oldIndex, newIndex)
-    })
-  }
-
-  const isDefaultOrder = order.every(
-    (key, index) => key === DEFAULT_HOME_CARD_ORDER[index],
-  )
-
-  const handleSave = async () => {
-    const cleanedCards: HomeCardsSettings = { ...DEFAULT_HOME_CARDS }
-    for (const key of DEFAULT_HOME_CARD_ORDER) {
-      cleanedCards[key] = Boolean(cards[key])
-    }
-    const cleanedOrder = resolveCardOrder(order)
-    try {
-      await patchVerge({
-        home_cards: cleanedCards,
-        home_cards_order: cleanedOrder,
-      })
-      onClose()
-    } catch (error) {
-      showNotice.error(error)
-    }
-  }
-
-  return (
-    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>{t('home.page.settings.title')}</DialogTitle>
-      <DialogContent>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: 'block', mb: 1.5 }}
-        >
-          {t('home.page.settings.orderHint')}
-        </Typography>
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext items={order} strategy={verticalListSortingStrategy}>
-            {order.map((key, index) => {
-              const meta = HOME_CARD_META.find((card) => card.key === key)
-              if (!meta) return null
-              return (
-                <SortableCardRow
-                  key={key}
-                  id={key}
-                  label={t(meta.labelKey)}
-                  checked={cards[key] || false}
-                  isFirst={index === 0}
-                  isLast={index === order.length - 1}
-                  onToggle={() => handleToggle(key)}
-                  onMoveUp={() => moveCard(index, index - 1)}
-                  onMoveDown={() => moveCard(index, index + 1)}
-                />
-              )
-            })}
-          </SortableContext>
-        </DndContext>
-        <Button
-          size="small"
-          startIcon={<RestartAltRounded />}
-          onClick={() => setOrder([...DEFAULT_HOME_CARD_ORDER])}
-          disabled={isDefaultOrder}
-          sx={{ mt: 0.5 }}
-        >
-          {t('home.page.settings.restoreOrder')}
-        </Button>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{t('shared.actions.cancel')}</Button>
-        <Button onClick={handleSave} color="primary">
-          {t('shared.actions.save')}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  )
-}
-
 const HomePage = () => {
   const { t } = useTranslation()
   const { verge, patchVerge } = useVerge()
   const { mutateClash } = useClash()
+  const { profiles, mutateProfiles } = useProfiles()
+  const { refreshProxy } = useAppRefreshers()
   const {
     indicator: systemProxyIndicator,
     configState: systemProxyConfigState,
@@ -393,8 +122,8 @@ const HomePage = () => {
     verge?.proxy_host || '127.0.0.1',
     displayedMixedPort,
   )
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [systemProxyBusy, setSystemProxyBusy] = useState(false)
+  const [updatingSubscriptions, setUpdatingSubscriptions] = useState(false)
   const dnsRef = useRef<DialogRef>(null)
   const portRef = useRef<DialogRef>(null)
   const dnsMutateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -438,6 +167,46 @@ const HomePage = () => {
     }
   })
 
+  const remoteProfileUids = useMemo(
+    () =>
+      (profiles?.items ?? [])
+        .filter((item): item is IProfileItem =>
+          Boolean(item?.uid && item.type === 'remote'),
+        )
+        .map((item) => item.uid),
+    [profiles?.items],
+  )
+  const profilesReady = profiles != null
+
+  const handleUpdateSubscriptions = useLockFn(async () => {
+    if (!profilesReady) return
+    if (remoteProfileUids.length === 0) {
+      showNotice.info('home.page.feedback.notifications.noRemoteSubscriptions')
+      return
+    }
+    setUpdatingSubscriptions(true)
+    try {
+      const { succeeded, failed, skipped } =
+        await updateRemoteProfiles(remoteProfileUids)
+      await mutateProfiles()
+      await refreshProxy()
+      if (succeeded > 0 && failed === 0) {
+        showNotice.success(
+          'home.page.feedback.notifications.subscriptionsUpdated',
+        )
+      } else if (succeeded > 0 && failed > 0) {
+        showNotice.info(
+          'home.page.feedback.notifications.subscriptionsPartial',
+          { succeeded, failed },
+        )
+      } else if (skipped > 0 && succeeded === 0 && failed === 0) {
+        showNotice.info('profiles.page.feedback.notifications.updateBusy')
+      }
+    } finally {
+      setUpdatingSubscriptions(false)
+    }
+  })
+
   const isOhos = getSystem() === 'ohos'
 
   // 区块显示状态：迁移旧键后只保留当前已知区块
@@ -468,14 +237,6 @@ const HomePage = () => {
     () => resolveCardOrder(verge?.home_cards_order),
     [verge?.home_cards_order],
   )
-
-  const toGithubDoc = useLockFn(() => {
-    return openWebUrl('https://clash-verge-rev.github.io/index.html')
-  })
-
-  const openSettings = useCallback(() => {
-    setSettingsOpen(true)
-  }, [])
 
   const visibleSections = useMemo(
     () => homeCardsOrder.filter((key) => homeCards[key]),
@@ -651,24 +412,45 @@ const HomePage = () => {
               />
             </Box>
           </Tooltip>
-          <Tooltip title={t('home.page.tooltips.lightweightMode')} arrow>
-            <IconButton
-              onClick={async () => await entry_lightweight_mode()}
-              size="small"
-              color="inherit"
-            >
-              <HistoryEduOutlined />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={t('home.page.tooltips.manual')} arrow>
-            <IconButton onClick={toGithubDoc} size="small" color="inherit">
-              <HelpOutlineRounded />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={t('home.page.tooltips.settings')} arrow>
-            <IconButton onClick={openSettings} size="small" color="inherit">
-              <SettingsOutlined />
-            </IconButton>
+          <Tooltip
+            title={
+              !profilesReady
+                ? t('shared.statuses.loading')
+                : remoteProfileUids.length === 0
+                  ? t('home.page.tooltips.updateSubscriptionsEmpty')
+                  : t('home.page.tooltips.updateSubscriptions')
+            }
+            arrow
+          >
+            <Box component="span" sx={{ display: 'inline-flex', ml: 0.25 }}>
+              <Button
+                size="small"
+                variant="text"
+                disabled={
+                  updatingSubscriptions ||
+                  !profilesReady ||
+                  remoteProfileUids.length === 0
+                }
+                startIcon={
+                  updatingSubscriptions ? (
+                    <CircularProgress size={14} color="inherit" />
+                  ) : (
+                    <RefreshRounded fontSize="small" />
+                  )
+                }
+                onClick={() => void handleUpdateSubscriptions()}
+                sx={{
+                  minWidth: 0,
+                  px: 1,
+                  color: 'text.secondary',
+                  textTransform: 'none',
+                  whiteSpace: 'nowrap',
+                  '&:hover': { color: 'primary.main' },
+                }}
+              >
+                {t('home.page.actions.updateSubscriptions')}
+              </Button>
+            </Box>
           </Tooltip>
         </Box>
       }
@@ -693,15 +475,6 @@ const HomePage = () => {
           </EnhancedCard>
         </Grid>
       </Grid>
-
-      {settingsOpen && (
-        <HomeSettingsDialog
-          key={`${serializeCardFlags(homeCards)}|${homeCardsOrder.join(',')}`}
-          onClose={() => setSettingsOpen(false)}
-          homeCards={homeCards}
-          homeCardsOrder={homeCardsOrder}
-        />
-      )}
     </BasePage>
   )
 }

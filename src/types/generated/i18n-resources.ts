@@ -201,12 +201,22 @@ export interface TranslationResources {
         }
       }
       page: {
+        actions: {
+          updateSubscriptions: string
+        }
         cards: {
           networkMode: string
           networkSettings: string
           overview: string
           proxyMode: string
           trafficStats: string
+        }
+        feedback: {
+          notifications: {
+            noRemoteSubscriptions: string
+            subscriptionsPartial: string
+            subscriptionsUpdated: string
+          }
         }
         proxyServiceAddress: string
         settings: {
@@ -234,6 +244,8 @@ export interface TranslationResources {
           manual: string
           openPortSettings: string
           settings: string
+          updateSubscriptions: string
+          updateSubscriptionsEmpty: string
         }
       }
     }
