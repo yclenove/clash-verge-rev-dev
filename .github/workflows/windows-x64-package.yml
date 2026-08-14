@@ -1,4 +1,4 @@
-name: Windows x64 Package
+name: Desktop Package
 
 on:
   workflow_dispatch:
@@ -13,13 +13,45 @@ env:
   HUSKY: 0
 
 concurrency:
-  group: windows-x64-package-${{ github.ref }}
+  group: desktop-package-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  windows-x64:
-    name: Build Windows x64 NSIS and portable
-    runs-on: windows-latest
+  native:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            label: Windows x64
+            artifact: windows-x64
+            portable_arch: x64
+            bundle_args: "-b nsis"
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            label: Windows ARM64
+            artifact: windows-arm64
+            portable_arch: arm64
+            bundle_args: "-b nsis"
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            label: macOS Apple
+            artifact: macos-aarch64
+            bundle_args: "-b dmg"
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            label: macOS Intel
+            artifact: macos-x64
+            bundle_args: "-b dmg"
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            label: Linux amd64
+            artifact: linux-amd64
+            bundle_args: ""
+
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -28,13 +60,119 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: '1.95.0'
-          targets: x86_64-pc-windows-msvc
+          targets: ${{ matrix.target }}
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
           prefix-key: 'v1-rust'
-          key: 'windows-x64-package'
+          key: 'desktop-package-${{ matrix.os }}-${{ matrix.target }}'
+          workspaces: |
+            . -> target
+          cache-all-crates: true
+          cache-workspace-crates: true
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxslt1.1 libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.18.0'
+          cache: 'pnpm'
+
+      - name: Install dependencies and sidecars
+        run: |
+          pnpm i
+          pnpm run prebuild ${{ matrix.target }}
+
+      - name: Tauri build
+        uses: tauri-apps/tauri-action@v1
+        env:
+          NODE_OPTIONS: '--max_old_space_size=4096'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: pnpm
+          args: --target ${{ matrix.target }} ${{ matrix.bundle_args }}
+          includeUpdaterJson: false
+
+      - name: Build portable zip
+        if: runner.os == 'Windows'
+        run: pnpm portable ${{ matrix.target }}
+
+      - name: Upload Windows NSIS
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Clash.Verge-${{ matrix.artifact }}-setup
+          path: target/${{ matrix.target }}/release/bundle/nsis/*setup.exe
+          if-no-files-found: error
+
+      - name: Upload Windows portable
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Clash.Verge-${{ matrix.artifact }}-portable
+          path: Clash.Verge_*_${{ matrix.portable_arch }}_portable.zip
+          if-no-files-found: error
+
+      - name: Upload macOS DMG
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Clash.Verge-${{ matrix.artifact }}
+          path: target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+      - name: Upload Linux packages
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Clash.Verge-${{ matrix.artifact }}
+          path: |
+            target/${{ matrix.target }}/release/bundle/deb/*.deb
+            target/${{ matrix.target }}/release/bundle/rpm/*.rpm
+          if-no-files-found: error
+
+  linux-arm:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-unknown-linux-gnu
+            arch: arm64
+            label: Linux ARM64
+            artifact: linux-arm64
+          - target: armv7-unknown-linux-gnueabihf
+            arch: armhf
+            label: Linux ARMv7
+            artifact: linux-armhf
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.95.0'
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: 'v1-rust'
+          key: 'desktop-package-ubuntu-22.04-${{ matrix.target }}'
           workspaces: |
             . -> target
           cache-all-crates: true
@@ -54,31 +192,68 @@ jobs:
       - name: Install dependencies and sidecars
         run: |
           pnpm i
-          pnpm run prebuild x86_64-pc-windows-msvc
+          pnpm run prebuild ${{ matrix.target }}
 
-      - name: Tauri build
-        uses: tauri-apps/tauri-action@v1
+      - name: Setup Linux cross sysroot
+        run: |-
+          cat > /tmp/sources.list << EOF
+          deb [arch=amd64,i386] http://archive.ubuntu.com/ubuntu jammy main multiverse universe restricted
+          deb [arch=amd64,i386] http://archive.ubuntu.com/ubuntu jammy-security main multiverse universe restricted
+          deb [arch=amd64,i386] http://archive.ubuntu.com/ubuntu jammy-updates main multiverse universe restricted
+          deb [arch=amd64,i386] http://archive.ubuntu.com/ubuntu jammy-backports main multiverse universe restricted
+
+          deb [arch=armhf,arm64] http://ports.ubuntu.com/ubuntu-ports jammy main multiverse universe restricted
+          deb [arch=armhf,arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main multiverse universe restricted
+          deb [arch=armhf,arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main multiverse universe restricted
+          deb [arch=armhf,arm64] http://ports.ubuntu.com/ubuntu-ports jammy-backports main multiverse universe restricted
+          EOF
+
+          sudo mv /etc/apt/sources.list /etc/apt/sources.list.default
+          sudo mv /tmp/sources.list /etc/apt/sources.list
+
+          sudo dpkg --add-architecture ${{ matrix.arch }}
+          sudo apt update
+
+          sudo apt install -y \
+            libxslt1.1:${{ matrix.arch }} \
+            libwebkit2gtk-4.1-dev:${{ matrix.arch }} \
+            libayatana-appindicator3-dev:${{ matrix.arch }} \
+            libssl-dev:${{ matrix.arch }} \
+            patchelf:${{ matrix.arch }} \
+            librsvg2-dev:${{ matrix.arch }}
+
+      - name: Install aarch64 tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Install armv7 tools
+        if: matrix.target == 'armv7-unknown-linux-gnueabihf'
+        run: |
+          sudo apt install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }} --toolchain 1.95.0 || rustup target add ${{ matrix.target }}
+
+      - name: Build Linux ARM
+        run: |
+          export PKG_CONFIG_ALLOW_CROSS=1
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig/:$PKG_CONFIG_PATH
+            export PKG_CONFIG_SYSROOT_DIR=/usr/aarch64-linux-gnu/
+          elif [ "${{ matrix.target }}" = "armv7-unknown-linux-gnueabihf" ]; then
+            export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig/:$PKG_CONFIG_PATH
+            export PKG_CONFIG_SYSROOT_DIR=/usr/arm-linux-gnueabihf/
+          fi
+          pnpm build --target ${{ matrix.target }}
         env:
           NODE_OPTIONS: '--max_old_space_size=4096'
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tauriScript: pnpm
-          args: --target x86_64-pc-windows-msvc -b nsis
-          includeUpdaterJson: false
 
-      - name: Build portable zip
-        run: pnpm portable x86_64-pc-windows-msvc
-
-      - name: Upload NSIS installer
+      - name: Upload Linux ARM packages
         uses: actions/upload-artifact@v7
         with:
-          name: Clash.Verge-windows-x64-setup
-          path: target/x86_64-pc-windows-msvc/release/bundle/nsis/*setup.exe
-          if-no-files-found: error
-
-      - name: Upload portable zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: Clash.Verge-windows-x64-portable
-          path: Clash.Verge_*_x64_portable.zip
+          name: Clash.Verge-${{ matrix.artifact }}
+          path: |
+            target/${{ matrix.target }}/release/bundle/deb/*.deb
+            target/${{ matrix.target }}/release/bundle/rpm/*.rpm
           if-no-files-found: error
