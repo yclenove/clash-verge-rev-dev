@@ -419,7 +419,10 @@ function clashMeta() {
 async function downloadFile(url, outPath) {
   const response = await proxyFetch(url, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/octet-stream' },
+    headers: {
+      Accept: '*/*',
+      'User-Agent': 'clash-verge-prebuild/2.5.3',
+    },
   })
   if (!response.ok) {
     const body = await response.text().catch(() => '')
@@ -445,6 +448,12 @@ async function downloadFile(url, outPath) {
       await fsp.writeFile(outPath, buf)
       throw new Error(
         `Downloaded file for ${url} is not a valid zip (magic mismatch).`,
+      )
+    }
+  } else if (url.endsWith('.dll')) {
+    if (!(buf[0] === 0x4d && buf[1] === 0x5a)) {
+      throw new Error(
+        `Downloaded file for ${url} is not a PE dll (magic mismatch).`,
       )
     }
   }
@@ -585,22 +594,49 @@ async function resolveResource(binInfo) {
 
 // SimpleSC.dll (win plugin)
 const resolvePlugin = async () => {
-  const url =
-    'https://nsis.sourceforge.io/mediawiki/images/e/ef/NSIS_Simple_Service_Plugin_Unicode_1.30.zip'
+  const pluginDir = path.join(process.env.APPDATA || '', 'Local/NSIS')
+  const pluginPath = path.join(pluginDir, 'SimpleSC.dll')
+  await fsp.mkdir(pluginDir, { recursive: true })
+  if (!FORCE && fs.existsSync(pluginPath)) return
+
+  const vendorDll = path.join(cwd, 'scripts/vendor/SimpleSC.dll')
+  if (fs.existsSync(vendorDll)) {
+    await fsp.cp(vendorDll, pluginPath, { recursive: true, force: true })
+    log_success('copied vendored SimpleSC.dll')
+    return
+  }
+
+  const pluginUrls = [
+    'https://raw.githubusercontent.com/development-bizeta-mestre/nsis-extension/master/nsis/plugins/x86-unicode/SimpleSC.dll',
+    'https://web.archive.org/web/20250510131505/https://nsis.sourceforge.io/mediawiki/images/e/ef/NSIS_Simple_Service_Plugin_Unicode_1.30.zip',
+    'https://nsis.sourceforge.io/mediawiki/images/e/ef/NSIS_Simple_Service_Plugin_Unicode_1.30.zip',
+  ]
   const tempDir = path.join(TEMP_DIR, 'SimpleSC')
   const tempZip = path.join(
     tempDir,
     'NSIS_Simple_Service_Plugin_Unicode_1.30.zip',
   )
   const tempDll = path.join(tempDir, 'SimpleSC.dll')
-  const pluginDir = path.join(process.env.APPDATA || '', 'Local/NSIS')
-  const pluginPath = path.join(pluginDir, 'SimpleSC.dll')
-  await fsp.mkdir(pluginDir, { recursive: true })
   await fsp.mkdir(tempDir, { recursive: true })
-  if (!FORCE && fs.existsSync(pluginPath)) return
   try {
-    if (!fs.existsSync(tempZip)) {
-      await downloadFile(url, tempZip)
+    let downloaded = false
+    for (const url of pluginUrls) {
+      try {
+        const dest = url.endsWith('.dll') ? tempDll : tempZip
+        await downloadFile(url, dest)
+        downloaded = true
+        break
+      } catch (err) {
+        log_error('task::plugin url failed ==', `${url}: ${err.message}`)
+      }
+    }
+    if (!downloaded) {
+      throw new Error('Failed to download SimpleSC plugin from all mirrors')
+    }
+    if (fs.existsSync(tempDll) && !fs.existsSync(tempZip)) {
+      await fsp.cp(tempDll, pluginPath, { recursive: true, force: true })
+      log_success('downloaded SimpleSC.dll')
+      return
     }
     const zip = new AdmZip(tempZip)
     zip

@@ -15,6 +15,9 @@
 ## 涉及文件
 
 - `.github/workflows/windows-x64-package.yml`（工作流名改为 Desktop Package）
+- `scripts/prebuild.mjs`（NSIS 插件不再只依赖 sourceforge）
+- `scripts/vendor/SimpleSC.dll`
+- `scripts/prebuild-resource-utils.test.mjs`
 - `docs/design/specs/2026-08-15-desktop-cloud-build-design.md`
 - `docs/design/plans/2026-08-15-desktop-cloud-build.md`
 - `docs/changelog/2026-08-15-desktop-cloud-build.md`

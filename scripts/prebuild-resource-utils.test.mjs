@@ -41,3 +41,11 @@ test('downloadToTempAndReplace replaces target on success', async () => {
   assert.equal(targetContent, 'new-content')
   assert.equal(fs.existsSync(tempDownloadPath(target)), false)
 })
+
+test('vendored SimpleSC.dll is a PE binary', () => {
+  const dll = path.join(import.meta.dirname, 'vendor/SimpleSC.dll')
+  const buf = fs.readFileSync(dll)
+  assert.equal(buf[0], 0x4d)
+  assert.equal(buf[1], 0x5a)
+  assert.ok(buf.length > 10_000)
+})
