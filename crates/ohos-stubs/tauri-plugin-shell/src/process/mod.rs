@@ -49,9 +49,9 @@ impl CommandChild {
             return crate::kill_ncp_child(self.pid).map_err(crate::Error::Unavailable);
         }
         if let Some(child) = self.child {
-            let mut guard = child.lock().map_err(|_| {
-                crate::Error::Unavailable("sidecar child lock poisoned".into())
-            })?;
+            let mut guard = child
+                .lock()
+                .map_err(|_| crate::Error::Unavailable("sidecar child lock poisoned".into()))?;
             let _ = guard.kill();
             let _ = guard.wait();
             return Ok(());

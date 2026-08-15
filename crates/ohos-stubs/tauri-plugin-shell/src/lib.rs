@@ -7,9 +7,9 @@ use std::{
 };
 
 use tauri::{
+    AppHandle, Manager, Runtime,
     async_runtime::{self, Receiver},
     plugin::{Builder, TauriPlugin},
-    AppHandle, Manager, Runtime,
 };
 
 pub mod process;
@@ -48,12 +48,8 @@ mod ncp {
         pub fd_list: NativeChildProcessFdList,
     }
 
-    type StartFn = unsafe extern "C" fn(
-        *const c_char,
-        NativeChildProcessArgs,
-        NativeChildProcessOptions,
-        *mut i32,
-    ) -> i32;
+    type StartFn =
+        unsafe extern "C" fn(*const c_char, NativeChildProcessArgs, NativeChildProcessOptions, *mut i32) -> i32;
     type KillFn = unsafe extern "C" fn(i32) -> i32;
 
     struct Api {
@@ -139,9 +135,7 @@ mod ncp {
         drop(entry_c);
 
         if rc != NCP_NO_ERROR {
-            return Err(format!(
-                "OH_Ability_StartNativeChildProcess failed: code={rc}"
-            ));
+            return Err(format!("OH_Ability_StartNativeChildProcess failed: code={rc}"));
         }
         if pid <= 0 {
             return Err(format!("native child pid invalid: {pid}"));
@@ -197,9 +191,7 @@ impl<R: Runtime, T: Manager<R>> ShellExt<R> for T {
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("shell")
         .setup(|app, _api| {
-            app.manage(Shell {
-                app: app.clone(),
-            });
+            app.manage(Shell { app: app.clone() });
             Ok(())
         })
         .build()
@@ -211,9 +203,7 @@ pub fn sidecar_bin_dir() -> PathBuf {
 }
 
 fn sidecar_bin_dir_haps_entry() -> PathBuf {
-    PathBuf::from(
-        "/data/storage/el2/base/haps/entry/files/io.github.clash-verge-rev.clash-verge-rev/bin",
-    )
+    PathBuf::from("/data/storage/el2/base/haps/entry/files/io.github.clash-verge-rev.clash-verge-rev/bin")
 }
 
 pub fn ensure_sidecar_executable(name: &str) -> Result<PathBuf> {
@@ -276,9 +266,7 @@ fn candidate_sidecar_sources(name: &str) -> Vec<PathBuf> {
     out.push(PathBuf::from(format!(
         "/data/storage/el1/bundle/entry/resources/rawfile/{name}"
     )));
-    out.push(PathBuf::from(format!(
-        "/data/storage/el1/bundle/libs/arm64/{name}"
-    )));
+    out.push(PathBuf::from(format!("/data/storage/el1/bundle/libs/arm64/{name}")));
     out.push(sidecar_bin_dir().join(format!("{name}.src")));
     // legacy hyphen path
     out.push(PathBuf::from(format!(
@@ -385,8 +373,7 @@ impl Command {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        self.args
-            .extend(args.into_iter().map(|s| s.as_ref().to_os_string()));
+        self.args.extend(args.into_iter().map(|s| s.as_ref().to_os_string()));
         self
     }
 
@@ -462,10 +449,7 @@ impl Command {
 
         thread::spawn(move || {
             let code = wait_pid(pid);
-            let _ = tx.blocking_send(CommandEvent::Terminated(TerminatedPayload {
-                code,
-                signal: None,
-            }));
+            let _ = tx.blocking_send(CommandEvent::Terminated(TerminatedPayload { code, signal: None }));
         });
 
         Ok((

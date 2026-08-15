@@ -38,7 +38,12 @@ pub struct LogEntry {
 }
 
 impl LogEntry {
-    pub(crate) fn new(ts: i64, level: impl Into<String>, source: impl Into<String>, payload: impl Into<String>) -> Self {
+    pub(crate) fn new(
+        ts: i64,
+        level: impl Into<String>,
+        source: impl Into<String>,
+        payload: impl Into<String>,
+    ) -> Self {
         Self {
             id: 0,
             ts,

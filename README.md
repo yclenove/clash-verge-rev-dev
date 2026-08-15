@@ -22,13 +22,15 @@ A Clash Meta GUI based on <a href="https://github.com/tauri-apps/tauri">Tauri</a
 
 ## 关于本仓库
 
-这是基于 Clash Verge Rev 的公开源码快照（当前版本 **2.5.3**），主要用于本地开发与 **macOS** 打包验证。
+这是 Clash Verge Rev **2.5.3** 的 **Windows 专用开发树**（分支 `windows-dev`），从本地快照克隆，只修 Windows 客户端。
 
-- 仓库地址：<https://github.com/zoozlmaki-byte/clash-verge-rev-dev>
+- 本树路径：`D:\nexus-wsl\clash-verge-rev-windows`
+- 原树（macOS / OpenHarmony）：`D:\nexus-wsl\clash-verge-rev`
 - 上游项目：<https://github.com/clash-verge-rev/clash-verge-rev>
-- macOS 构建说明见：[MAC_BUILD.md](./MAC_BUILD.md)
+- Windows 开发约定见：[WINDOWS.md](./WINDOWS.md)
+- 环境与命令见：[CONTRIBUTING.md](./CONTRIBUTING.md)
 
-> 说明：本仓库可能包含本地/移植相关改动，不等同于上游正式发布树。
+> 说明：本仓库是改过的本地树，不等同于上游正式发布版。不要把 OHOS / macOS 打包工作做到本目录。
 
 ## Preview
 

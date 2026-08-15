@@ -1,6 +1,6 @@
 use tauri::{
-    plugin::{Builder, TauriPlugin},
     AppHandle, Manager, Runtime,
+    plugin::{Builder, TauriPlugin},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -64,9 +64,7 @@ impl<R: Runtime, T: Manager<R>> NotificationExt<R> for T {
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("notification")
         .setup(|app, _api| {
-            app.manage(Notification {
-                app: app.clone(),
-            });
+            app.manage(Notification { app: app.clone() });
             Ok(())
         })
         .build()
