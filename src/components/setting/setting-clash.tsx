@@ -18,6 +18,7 @@ import getSystem from '@/utils/get-system'
 import { ClashCoreViewer } from './mods/clash-core-viewer'
 import { ClashPortViewer } from './mods/clash-port-viewer'
 import { ControllerViewer } from './mods/controller-viewer'
+import { CursorIspSetupViewer } from './mods/cursor-isp-setup-viewer'
 import { DnsViewer } from './mods/dns-viewer'
 import { HeaderConfiguration } from './mods/external-controller-cors'
 import { GuardState } from './mods/guard-state'
@@ -60,6 +61,7 @@ const SettingClash = ({ onError }: Props) => {
   const dnsRef = useRef<DialogRef>(null)
   const corsRef = useRef<DialogRef>(null)
   const tunnelRef = useRef<DialogRef>(null)
+  const cursorIspRef = useRef<DialogRef>(null)
 
   const onSwitchFormat = (_e: any, value: boolean) => value
   const onChangeData = (patch: Partial<IConfigData>) => {
@@ -101,6 +103,17 @@ const SettingClash = ({ onError }: Props) => {
       <DnsViewer ref={dnsRef} />
       <HeaderConfiguration ref={corsRef} />
       <TunnelsViewer ref={tunnelRef} />
+      <CursorIspSetupViewer ref={cursorIspRef} />
+      <SettingItem
+        onClick={() => cursorIspRef.current?.open()}
+        label={t('settings.sections.clash.form.fields.cursorIspSetup')}
+        extra={
+          <TooltipIcon
+            title={t('settings.sections.clash.form.tooltips.cursorIspSetup')}
+            sx={{ opacity: '0.7' }}
+          />
+        }
+      />
       <SettingItem
         label={t('settings.sections.clash.form.fields.allowLan')}
         extra={

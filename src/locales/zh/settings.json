@@ -128,13 +128,15 @@
               "add": "添加",
               "addNew": "添加新隧道"
             }
-          }
+          },
+          "cursorIspSetup": "Cursor ISP 一键设置"
         },
         "tooltips": {
           "networkInterface": "网络接口",
           "unifiedDelay": "开启统一延迟时，会进行两次延迟测试，以消除连接握手等带来的不同类型节点的延迟差异",
           "logLevel": "仅对日志目录 Service 文件夹下的内核日志文件生效",
-          "openUwpTool": "Windows 8 开始限制 UWP 应用（如微软商店）直接访问本地主机的网络服务，使用此工具可绕过该限制"
+          "openUwpTool": "Windows 8 开始限制 UWP 应用（如微软商店）直接访问本地主机的网络服务，使用此工具可绕过该限制",
+          "cursorIspSetup": "填入静态 ISP 地址/端口/账号，一键写入 Cursor 规则和前置跳链路。默认只让 Cursor 走 ISP，不会打开全局链式模式。"
         },
         "options": {
           "logLevel": {
@@ -636,6 +638,52 @@
       "fields": {
         "ipAddress": "IP 地址",
         "macAddress": "MAC 地址"
+      }
+    },
+    "cursorIspSetup": {
+      "title": "Cursor ISP 一键设置",
+      "fields": {
+        "protocol": "ISP 协议",
+        "server": "ISP 地址",
+        "port": "ISP 端口",
+        "username": "用户名",
+        "password": "密码",
+        "hopGroup": "前置代理组",
+        "exitGroup": "出口组名",
+        "nodeName": "ISP 节点名"
+      },
+      "toggles": {
+        "applyAll": "同步到全部订阅",
+        "systemProxy": "同时开启系统代理",
+        "tunMode": "同时开启 TUN（Cursor HTTPS 需要）",
+        "globalChain": "全局链式模式（全部走 ISP）"
+      },
+      "actions": {
+        "apply": "一键应用",
+        "test": "测试 ISP 节点",
+        "revert": "还原 Cursor 规则"
+      },
+      "messages": {
+        "intro": "只让 Cursor 走「前置订阅 -> 静态 ISP」出口。其它软件仍走原订阅。Cursor 的 HTTPS 需要 TUN，默认会打开。",
+        "hopHint": "一般填订阅里的选择组，例如 JMS。ISP 节点会先经这个组再出网。",
+        "targets": "将写入：{{profiles}}",
+        "applied": "已写入 {{profiles}}。Cursor 进程/域名走 {{group}} / {{node}}。已开 TUN。混合端口 {{port}}。",
+        "reverted": "已从 {{profiles}} 和全局规则里移除 Cursor ISP 配置。",
+        "applySuccess": "Cursor ISP 设置已应用",
+        "revertSuccess": "Cursor ISP 设置已还原",
+        "testOk": "ISP 节点可用，延迟 {{delay}} ms（含前置跳）",
+        "globalChainWarn": "开启后，走该前置组的流量都会经 ISP 出口，不只是 Cursor。",
+        "tunHint": "TUN 才能把 Cursor 的 SSL 抓进 Clash。需要管理员运行，或已安装服务。"
+      },
+      "errors": {
+        "server": "请填写 ISP 地址",
+        "port": "请填写有效端口",
+        "hopGroup": "请填写前置代理组",
+        "exitGroup": "请填写出口组名",
+        "nodeName": "请填写 ISP 节点名，且不要和组名重复",
+        "noProfiles": "没有可写入的订阅。请先导入订阅。",
+        "missingHopNode": "全局链式模式需要先在前置组里选一个普通节点",
+        "testFailed": "ISP 节点测试失败。请确认已应用配置，且前置组节点可用。"
       }
     }
   },

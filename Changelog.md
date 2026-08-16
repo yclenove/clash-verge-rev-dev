@@ -8,6 +8,7 @@
 <summary><strong> ✨ 新增功能 </strong></summary>
 
 - 新增混合代理端口冲突自动回退：启动时检测端口占用并持久化可用端口，同时统一首页、设置与系统代理中的生效端口显示
+- 新增 Cursor ISP 一键设置：在 Clash 设置里填静态 ISP 地址/端口/账号，写入前置跳节点、EXIT 组和 Cursor 规则
 
 </details>
 

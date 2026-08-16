@@ -153,6 +153,7 @@ Profile 级偏好存放在 `localStorage`（见 `constants/profile-proxy-storage
 - **入口**：代理页「链式模式」开关
 - **状态**：`proxy-chain-items`、`proxy-chain-exit-node` 等 localStorage + `verge.proxy_chain_nodes`
 - **组件**：`proxy-chain.tsx`、`proxy-groups-chain.tsx`、`proxy-chain-picker.tsx`
+- **Cursor ISP 一键设置**：设置页 Clash 区块入口，写入静态 ISP 节点（`dialer-proxy` 前置组）、`EXIT` 组和全局 Cursor 规则；默认不打开全局链式模式
 - **GeoIP**：Rust `cmd/geoip.rs` 离线 MMDB；前端 `use-servers-geoip.ts` 会话级缓存
 
 ### 5.6 Rust 后端要点

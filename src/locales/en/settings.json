@@ -128,13 +128,15 @@
               "add": "Add",
               "addNew": "Add New Tunnel"
             }
-          }
+          },
+          "cursorIspSetup": "Cursor ISP One-Click Setup"
         },
         "tooltips": {
           "networkInterface": "Network Interface",
           "unifiedDelay": "When unified delay is turned on, two delay tests will be performed to eliminate the delay differences between different types of nodes caused by connection handshakes, etc",
           "logLevel": "This parameter is valid only for kernel log files in the log directory Service folder",
-          "openUwpTool": "Since Windows 8, UWP apps (such as Microsoft Store) are restricted from directly accessing local host network services, and this tool can be used to bypass this restriction"
+          "openUwpTool": "Since Windows 8, UWP apps (such as Microsoft Store) are restricted from directly accessing local host network services, and this tool can be used to bypass this restriction",
+          "cursorIspSetup": "Fill in the static ISP host/port/account to write Cursor rules and the hop chain. Default is Cursor-only; global chain mode stays off."
         },
         "options": {
           "logLevel": {
@@ -636,6 +638,52 @@
       "fields": {
         "ipAddress": "IP Address",
         "macAddress": "MAC Address"
+      }
+    },
+    "cursorIspSetup": {
+      "title": "Cursor ISP One-Click Setup",
+      "fields": {
+        "protocol": "ISP Protocol",
+        "server": "ISP Host",
+        "port": "ISP Port",
+        "username": "Username",
+        "password": "Password",
+        "hopGroup": "Hop Group",
+        "exitGroup": "Exit Group",
+        "nodeName": "ISP Node Name"
+      },
+      "toggles": {
+        "applyAll": "Apply to all subscriptions",
+        "systemProxy": "Enable system proxy",
+        "tunMode": "Enable TUN (required for Cursor HTTPS)",
+        "globalChain": "Global chain mode (all hop-group traffic)"
+      },
+      "actions": {
+        "apply": "Apply",
+        "test": "Test ISP node",
+        "revert": "Revert Cursor rules"
+      },
+      "messages": {
+        "intro": "Only Cursor uses hop-subscription -> static ISP. Other apps keep the original subscription. Cursor HTTPS needs TUN, which is on by default.",
+        "hopHint": "Usually the subscription selector group, e.g. JMS. The ISP node dials through this group first.",
+        "targets": "Will write: {{profiles}}",
+        "applied": "Wrote {{profiles}}. Cursor process/domains use {{group}} / {{node}}. TUN is on. Mixed port {{port}}.",
+        "reverted": "Removed Cursor ISP config from {{profiles}} and global rules.",
+        "applySuccess": "Cursor ISP setup applied",
+        "revertSuccess": "Cursor ISP setup reverted",
+        "testOk": "ISP node is reachable, delay {{delay}} ms including the hop",
+        "globalChainWarn": "When enabled, all traffic that uses the hop group exits via the ISP, not just Cursor.",
+        "tunHint": "TUN is what gets Cursor SSL into Clash. Run as administrator, or install the service first."
+      },
+      "errors": {
+        "server": "Enter the ISP host",
+        "port": "Enter a valid port",
+        "hopGroup": "Enter the hop group",
+        "exitGroup": "Enter the exit group name",
+        "nodeName": "Enter an ISP node name that does not collide with a group",
+        "noProfiles": "No writable subscription found. Import one first.",
+        "missingHopNode": "Global chain mode needs a regular node selected in the hop group",
+        "testFailed": "ISP node test failed. Apply the setup first and make sure the hop node works."
       }
     }
   },

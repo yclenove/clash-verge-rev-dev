@@ -1021,6 +1021,52 @@ export interface TranslationResources {
             enableRandomPort: string
           }
         }
+        cursorIspSetup: {
+          actions: {
+            apply: string
+            revert: string
+            test: string
+          }
+          errors: {
+            exitGroup: string
+            hopGroup: string
+            missingHopNode: string
+            nodeName: string
+            noProfiles: string
+            port: string
+            server: string
+            testFailed: string
+          }
+          fields: {
+            exitGroup: string
+            hopGroup: string
+            nodeName: string
+            password: string
+            port: string
+            protocol: string
+            server: string
+            username: string
+          }
+          messages: {
+            applied: string
+            applySuccess: string
+            globalChainWarn: string
+            hopHint: string
+            intro: string
+            reverted: string
+            revertSuccess: string
+            targets: string
+            testOk: string
+            tunHint: string
+          }
+          title: string
+          toggles: {
+            applyAll: string
+            globalChain: string
+            systemProxy: string
+            tunMode: string
+          }
+        }
         dns: {
           dialog: {
             title: string
@@ -1299,6 +1345,7 @@ export interface TranslationResources {
             fields: {
               allowLan: string
               clashCore: string
+              cursorIspSetup: string
               dnsOverwrite: string
               external: string
               ipv6: string
@@ -1343,6 +1390,7 @@ export interface TranslationResources {
               }
             }
             tooltips: {
+              cursorIspSetup: string
               logLevel: string
               networkInterface: string
               openUwpTool: string
