@@ -19,7 +19,7 @@ export interface SeqProfileConfig {
   delete: unknown[]
 }
 
-export interface IspProxyNode {
+interface IspProxyNode {
   name: string
   type: CursorIspProtocol
   server: string
@@ -69,13 +69,13 @@ const CURSOR_DOMAINS = [
   'authenticator.cursor.sh',
 ]
 
-export const emptySeqConfig = (): SeqProfileConfig => ({
+const emptySeqConfig = (): SeqProfileConfig => ({
   prepend: [],
   append: [],
   delete: [],
 })
 
-export const directNodeName = (nodeName: string): string => `${nodeName}-Direct`
+const directNodeName = (nodeName: string): string => `${nodeName}-Direct`
 
 export const normalizeSetupInput = (
   input: Partial<CursorIspSetupInput>,
@@ -121,9 +121,7 @@ export const buildCursorIspRules = (exitGroup: string): string[] => [
   ...CURSOR_DOMAINS.map((domain) => `DOMAIN,${domain},${exitGroup}`),
 ]
 
-export const buildIspProxyNodes = (
-  input: CursorIspSetupInput,
-): IspProxyNode[] => {
+const buildIspProxyNodes = (input: CursorIspSetupInput): IspProxyNode[] => {
   const auth = input.username
     ? { username: input.username, password: input.password }
     : {}
@@ -145,7 +143,7 @@ export const buildIspProxyNodes = (
   return [chained, direct]
 }
 
-export const buildExitGroup = (input: CursorIspSetupInput) => ({
+const buildExitGroup = (input: CursorIspSetupInput) => ({
   name: input.exitGroup,
   type: 'select',
   proxies: [
@@ -173,15 +171,8 @@ const ruleTextOf = (value: unknown): string | null => {
   return null
 }
 
-export const isManagedIspProxyName = (
-  name: string,
-  nodeName: string,
-): boolean => name === nodeName || name === directNodeName(nodeName)
-
-export const isManagedCursorIspRule = (
-  rule: string,
-  exitGroup: string,
-): boolean => buildCursorIspRules(exitGroup).includes(rule)
+const isManagedIspProxyName = (name: string, nodeName: string): boolean =>
+  name === nodeName || name === directNodeName(nodeName)
 
 export const parseSeqConfig = (
   raw: string | null | undefined,
@@ -205,7 +196,7 @@ export const dumpSeqConfig = (config: SeqProfileConfig): string =>
     { forceQuotes: true, lineWidth: 120 },
   )
 
-export const ensureSeqConfig = (value: unknown): SeqProfileConfig => {
+const ensureSeqConfig = (value: unknown): SeqProfileConfig => {
   const rec = asRecord(value)
   const list = (key: 'prepend' | 'append' | 'delete') =>
     Array.isArray(rec?.[key]) ? [...(rec[key] as unknown[])] : []
