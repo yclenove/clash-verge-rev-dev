@@ -1049,10 +1049,7 @@ pub async fn enhance() -> Result<(Mapping, HashSet<String>, HashMap<String, Resu
     let config = profile.config;
 
     // 多订阅合并：将所有订阅的节点合并到当前配置（默认开启）。
-    let merge_enabled = Config::verge()
-        .await
-        .latest_arc()
-        .merge_other_profiles_enabled();
+    let merge_enabled = Config::verge().await.latest_arc().merge_other_profiles_enabled();
     let config = if merge_enabled {
         merge_other_profiles(config).await
     } else {
