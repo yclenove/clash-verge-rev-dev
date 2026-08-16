@@ -9,9 +9,9 @@ const LINUX_DNS_LISTEN: &str = "127.0.0.1:1053";
 /// Migrates legacy wildcard DNS defaults without changing explicit custom listeners.
 #[cfg_attr(
     not(all(target_os = "linux", not(target_env = "ohos"))),
-    allow(clippy::needless_pass_by_ref_mut)
+    allow(clippy::needless_pass_by_ref_mut, clippy::missing_const_for_fn)
 )]
-pub(crate) const fn normalize_dns_listen(config: &mut Mapping) -> bool {
+pub(crate) fn normalize_dns_listen(config: &mut Mapping) -> bool {
     #[cfg(not(all(target_os = "linux", not(target_env = "ohos"))))]
     {
         let _ = config;
