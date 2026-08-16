@@ -157,7 +157,7 @@ pub struct IVerge {
     /// 启动时随机化混合代理端口（避免端口冲突）
     pub enable_random_port: Option<bool>,
 
-    /// 将其它订阅节点合并进当前配置。默认关闭。
+    /// 将其它订阅节点合并进当前配置。默认开启，首页才能列出全部订阅节点。
     pub enable_merge_other_profiles: Option<bool>,
 
     /// 默认的延迟测试连接
@@ -455,7 +455,7 @@ impl IVerge {
             auto_close_connection: Some(true),
             auto_check_update: Some(false),
             enable_random_port: Some(false),
-            enable_merge_other_profiles: Some(false),
+            enable_merge_other_profiles: Some(true),
             enable_builtin_enhanced: Some(true),
             auto_log_clean: Some(2), // 1: 1天, 2: 7天, 3: 30天, 4: 90天
             enable_auto_backup_schedule: Some(false),
@@ -597,6 +597,11 @@ impl IVerge {
         }
     }
 
+    /// 未写入时默认合并其它订阅，避免首页只剩基准订阅节点。
+    pub fn merge_other_profiles_enabled(&self) -> bool {
+        self.enable_merge_other_profiles.unwrap_or(true)
+    }
+
     /// 获取日志等级
     pub fn get_log_level(&self) -> LevelFilter {
         if let Some(level) = self.app_log_level.as_ref() {
@@ -638,5 +643,24 @@ mod tests {
 
         assert_eq!(current.proxy_chain_group, None);
         assert_eq!(current.proxy_chain_nodes, Some(json!([])));
+    }
+
+    #[test]
+    fn merge_other_profiles_defaults_on_when_unset() {
+        let verge = IVerge {
+            enable_merge_other_profiles: None,
+            ..IVerge::default()
+        };
+        assert!(verge.merge_other_profiles_enabled());
+        assert!(IVerge::template().merge_other_profiles_enabled());
+    }
+
+    #[test]
+    fn merge_other_profiles_respects_explicit_off() {
+        let verge = IVerge {
+            enable_merge_other_profiles: Some(false),
+            ..IVerge::default()
+        };
+        assert!(!verge.merge_other_profiles_enabled());
     }
 }

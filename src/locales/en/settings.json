@@ -415,11 +415,13 @@
         "autoDelayDetection": "Auto Delay Detection",
         "autoDelayDetectionInterval": "Auto Delay Detection Interval",
         "defaultLatencyTest": "Default Latency Test",
-        "defaultLatencyTimeout": "Default Latency Timeout"
+        "defaultLatencyTimeout": "Default Latency Timeout",
+        "mergeOtherProfiles": "Merge Other Subscriptions"
       },
       "tooltips": {
         "autoCloseConnections": "Terminate established connections when the proxy group selection or proxy mode changes",
         "enableBuiltinEnhanced": "Compatibility handling for the configuration file",
+        "mergeOtherProfiles": "Merge nodes from other subscriptions into the current profile. Turning this off usually leaves only the current profile on the home node list",
         "autoDelayDetection": "Periodically test the current node latency in the background",
         "autoCheckUpdate": "Check for app updates in the background (off by default)",
         "defaultLatencyTest": "Used for HTTP client request testing only and won't make a difference to the configuration file"

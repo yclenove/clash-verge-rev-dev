@@ -3,6 +3,7 @@
 ### 🐞 修复问题
 
 修复 macOS 多显示器切换时托盘速率样式不同步
+- 修复首页标题栏缺少 TUN 开关，以及多订阅合并默认关闭导致首页只能看到基准订阅节点
 
 <details>
 <summary><strong> ✨ 新增功能 </strong></summary>

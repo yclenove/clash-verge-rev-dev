@@ -1210,6 +1210,7 @@ export interface TranslationResources {
             defaultLatencyTest: string
             defaultLatencyTimeout: string
             enableBuiltinEnhanced: string
+            mergeOtherProfiles: string
             proxyLayoutColumns: string
           }
           options: {
@@ -1228,6 +1229,7 @@ export interface TranslationResources {
             autoDelayDetection: string
             defaultLatencyTest: string
             enableBuiltinEnhanced: string
+            mergeOtherProfiles: string
           }
         }
         networkInterface: {

@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { BaseDialog, DialogRef, Switch, TooltipIcon } from '@/components/base'
 import { useVerge } from '@/hooks/use-verge'
 import { showNotice } from '@/services/notice-service'
+import { mergeOtherProfilesEnabled } from '@/utils/merge-other-profiles'
 
 /** Rust `Verge` stores this as `Option<i16>`. */
 const VERGE_LATENCY_TIMEOUT_MAX = 32767
@@ -41,6 +42,7 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
     autoLogClean: 2,
     defaultLatencyTimeout: 10000,
     autoCheckUpdate: false,
+    enableMergeOtherProfiles: true,
   })
 
   useImperativeHandle(ref, () => ({
@@ -60,6 +62,9 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
         autoLogClean: verge?.auto_log_clean || 0,
         defaultLatencyTimeout: verge?.default_latency_timeout || 10000,
         autoCheckUpdate: verge?.auto_check_update ?? false,
+        enableMergeOtherProfiles: mergeOtherProfilesEnabled(
+          verge?.enable_merge_other_profiles,
+        ),
       })
     },
     close: () => setOpen(false),
@@ -83,6 +88,7 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
         ),
         auto_log_clean: values.autoLogClean as any,
         auto_check_update: values.autoCheckUpdate,
+        enable_merge_other_profiles: values.enableMergeOtherProfiles,
       })
       setOpen(false)
     } catch (err) {
@@ -203,6 +209,25 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
             checked={values.autoCloseConnection}
             onChange={(_, c) =>
               setValues((v) => ({ ...v, autoCloseConnection: c }))
+            }
+            sx={{ marginLeft: 'auto' }}
+          />
+        </ListItem>
+
+        <ListItem sx={{ padding: '5px 2px' }}>
+          <ListItemText
+            primary={t('settings.modals.misc.fields.mergeOtherProfiles')}
+            sx={{ maxWidth: 'fit-content' }}
+          />
+          <TooltipIcon
+            title={t('settings.modals.misc.tooltips.mergeOtherProfiles')}
+            sx={{ opacity: '0.7' }}
+          />
+          <Switch
+            edge="end"
+            checked={values.enableMergeOtherProfiles}
+            onChange={(_, c) =>
+              setValues((v) => ({ ...v, enableMergeOtherProfiles: c }))
             }
             sx={{ marginLeft: 'auto' }}
           />

@@ -913,6 +913,7 @@ interface IVergeConfig {
   pac_file_content?: string
   proxy_host?: string
   enable_random_port?: boolean
+  enable_merge_other_profiles?: boolean
   verge_mixed_port?: number
   verge_socks_port?: number
   verge_redir_port?: number

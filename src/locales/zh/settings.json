@@ -415,11 +415,13 @@
         "autoDelayDetection": "自动延迟检测",
         "autoDelayDetectionInterval": "自动延迟检测间隔",
         "defaultLatencyTest": "默认测试链接",
-        "defaultLatencyTimeout": "测试超时时间"
+        "defaultLatencyTimeout": "测试超时时间",
+        "mergeOtherProfiles": "合并其它订阅节点"
       },
       "tooltips": {
         "autoCloseConnections": "当代理组选中节点或代理模式变动时，关闭已建立的连接",
         "enableBuiltinEnhanced": "配置文件的兼容性处理",
+        "mergeOtherProfiles": "把其它订阅的节点并进当前基准配置。关闭后首页节点列表通常只剩基准订阅",
         "autoDelayDetection": "后台定时检测当前节点延迟",
         "autoCheckUpdate": "在后台定期检查应用更新（默认关闭）",
         "defaultLatencyTest": "仅用于 HTTP 客户端请求测试，不会对配置文件产生影响"

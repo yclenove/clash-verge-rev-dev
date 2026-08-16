@@ -80,6 +80,10 @@ import {
   DEFAULT_DELAY_TIMEOUT,
 } from '@/utils/delay'
 import {
+  MERGE_OTHER_PROFILES_RESTORE_KEY,
+  shouldRestoreMergeOtherProfiles,
+} from '@/utils/merge-other-profiles'
+import {
   readProfileScopedItem as readStoredProfileItem,
   writeProfileScopedItem as writeStoredProfileItem,
 } from '@/utils/profile-scoped-storage'
@@ -197,8 +201,19 @@ export const ProfileProxyCard = ({
   const { clashConfig } = useClashConfigData()
   const { refreshProxy } = useAppRefreshers()
   const { isCoreDataPending } = useCoreDataStatus()
-  const { verge } = useVerge()
+  const { verge, patchVerge } = useVerge()
   const displayedMixedPort = useDisplayedMixedPort()
+
+  useEffect(() => {
+    if (!verge) return
+    if (localStorage.getItem(MERGE_OTHER_PROFILES_RESTORE_KEY) === '1') return
+    localStorage.setItem(MERGE_OTHER_PROFILES_RESTORE_KEY, '1')
+    if (
+      shouldRestoreMergeOtherProfiles(verge.enable_merge_other_profiles, false)
+    ) {
+      void patchVerge({ enable_merge_other_profiles: true })
+    }
+  }, [patchVerge, verge])
 
   // ==================== subscription filter ====================
   const { subscriptions, nodeProfileMap, nodeMetaMap } = useSubscriptionNodes()

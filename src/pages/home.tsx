@@ -29,10 +29,12 @@ import { NetworkModeCard } from '@/components/home/network-mode-card'
 import { ProfileProxyCard } from '@/components/home/profile-proxy-card'
 import { ClashPortViewer } from '@/components/setting/mods/clash-port-viewer'
 import { DnsViewer } from '@/components/setting/mods/dns-viewer'
+import { TunViewer } from '@/components/setting/mods/tun-viewer'
 import { useClash } from '@/hooks/use-clash'
 import { useDisplayedMixedPort } from '@/hooks/use-displayed-mixed-port'
 import { useProfiles } from '@/hooks/use-profiles'
 import { useSystemProxyState } from '@/hooks/use-system-proxy-state'
+import { useSystemState } from '@/hooks/use-system-state'
 import { useVerge } from '@/hooks/use-verge'
 import { useAppRefreshers } from '@/providers/app-data-context'
 import { showNotice } from '@/services/notice-service'
@@ -108,10 +110,11 @@ const resolveCardOrder = (stored: string[] | undefined): string[] => {
 
 const HomePage = () => {
   const { t } = useTranslation()
-  const { verge, patchVerge } = useVerge()
+  const { verge, patchVerge, mutateVerge } = useVerge()
   const { mutateClash } = useClash()
   const { profiles, mutateProfiles } = useProfiles()
   const { refreshProxy } = useAppRefreshers()
+  const { isTunModeAvailable } = useSystemState()
   const {
     indicator: systemProxyIndicator,
     configState: systemProxyConfigState,
@@ -123,9 +126,12 @@ const HomePage = () => {
     displayedMixedPort,
   )
   const [systemProxyBusy, setSystemProxyBusy] = useState(false)
+  const [tunBusy, setTunBusy] = useState(false)
   const [updatingSubscriptions, setUpdatingSubscriptions] = useState(false)
   const dnsRef = useRef<DialogRef>(null)
   const portRef = useRef<DialogRef>(null)
+  const tunRef = useRef<DialogRef>(null)
+  const tunEnabled = verge?.enable_tun_mode ?? false
   const dnsMutateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const dnsEnabled = verge?.enable_dns_settings ?? false
@@ -164,6 +170,24 @@ const HomePage = () => {
       showNotice.error(error)
     } finally {
       setSystemProxyBusy(false)
+    }
+  })
+
+  const handleTunToggle = useLockFn(async (enabled: boolean) => {
+    if (!isTunModeAvailable) {
+      showNotice.error('settings.sections.proxyControl.tooltips.tunUnavailable')
+      return
+    }
+    setTunBusy(true)
+    const previous = verge?.enable_tun_mode ?? false
+    mutateVerge({ ...verge, enable_tun_mode: enabled }, false)
+    try {
+      await patchVerge({ enable_tun_mode: enabled })
+    } catch (error) {
+      mutateVerge({ ...verge, enable_tun_mode: previous }, false)
+      showNotice.error(error)
+    } finally {
+      setTunBusy(false)
     }
   })
 
@@ -280,6 +304,7 @@ const HomePage = () => {
         >
           <DnsViewer ref={dnsRef} />
           <ClashPortViewer ref={portRef} />
+          <TunViewer ref={tunRef} />
           <Box
             sx={{
               display: 'flex',
@@ -379,6 +404,68 @@ const HomePage = () => {
                   onChange={(_, checked) =>
                     void handleSystemProxyToggle(checked)
                   }
+                />
+              </Box>
+            </Tooltip>
+          )}
+          {!isOhos && (
+            <Tooltip
+              title={
+                isTunModeAvailable
+                  ? t('home.components.proxyTun.tooltips.tunMode')
+                  : t('settings.sections.proxyControl.tooltips.tunUnavailable')
+              }
+              arrow
+            >
+              <Box
+                sx={(theme) => ({
+                  height: 30,
+                  pl: { xs: 0.25, sm: 1 },
+                  pr: 0.25,
+                  mr: 0.75,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  borderRadius: 1,
+                  bgcolor:
+                    tunEnabled && isTunModeAvailable
+                      ? alpha(theme.palette.success.main, 0.08)
+                      : 'transparent',
+                  transition: 'background-color 0.2s',
+                })}
+              >
+                <Typography
+                  variant="body2"
+                  component="button"
+                  type="button"
+                  onClick={() => tunRef.current?.open()}
+                  sx={{
+                    all: 'unset',
+                    display: { xs: 'none', sm: 'block' },
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    color:
+                      tunEnabled && isTunModeAvailable
+                        ? 'success.main'
+                        : 'text.secondary',
+                    '&:hover': { color: 'primary.main' },
+                  }}
+                >
+                  {t('settings.sections.system.toggles.tunMode')}
+                </Typography>
+                <Switch
+                  size="small"
+                  checked={tunEnabled && isTunModeAvailable}
+                  disabled={tunBusy || !isTunModeAvailable}
+                  slotProps={{
+                    input: {
+                      'aria-label': t(
+                        'settings.sections.system.toggles.tunMode',
+                      ),
+                    },
+                  }}
+                  onChange={(_, checked) => void handleTunToggle(checked)}
                 />
               </Box>
             </Tooltip>
