@@ -1,4 +1,5 @@
 // #[cfg(not(feature = "tracing"))]
+use crate::platform_plugins::shell::ShellExt as _;
 use crate::{
     config::{Config, IClashTemp, IProfiles, IVerge},
     constants,
@@ -16,7 +17,6 @@ use clash_verge_logging::Type;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::path::Path;
 use std::{path::PathBuf, str::FromStr as _};
-use crate::platform_plugins::shell::ShellExt as _;
 use tokio::fs;
 use tokio::fs::DirEntry;
 

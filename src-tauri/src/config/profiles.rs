@@ -53,7 +53,7 @@ const SELECTED_NODES_RECHECK_DELAY: Duration = Duration::from_secs(1);
 /// cold start is exactly when restoring runs. Bounded rather than indefinite because a record
 /// naming a node the profile genuinely no longer has looks identical from here, and would
 /// otherwise be retried for the life of the process.
-const SELECTED_NODES_SETTLE_DEADLINE: Duration = Duration::from_secs(30);
+const SELECTED_NODES_SETTLE_DEADLINE: Duration = Duration::from_secs(45);
 /// How often a restore looks again while waiting for those groups.
 const SELECTED_NODES_SETTLE_INTERVAL: Duration = Duration::from_secs(1);
 /// How long a start waits for the selections that *can* be put back before carrying on.
@@ -1632,10 +1632,7 @@ mod tests {
 
         let (_should_update, files) = profiles.delete_item(&String::from("main")).await.unwrap();
 
-        assert_eq!(
-            files,
-            vec![String::from("Rmain.yaml"), String::from("mmerge.yaml")]
-        );
+        assert_eq!(files, vec![String::from("Rmain.yaml"), String::from("mmerge.yaml")]);
         assert!(profiles.get_item("main").is_err());
         assert!(profiles.get_item("merge-1").is_err());
         assert!(profiles.current.is_none());

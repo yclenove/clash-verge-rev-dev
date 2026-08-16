@@ -50,4 +50,16 @@ mod tests {
         let port = find_next_available_port(20_000, &HashSet::new(), |candidate| candidate == 20_000);
         assert_eq!(port, None);
     }
+
+    #[test]
+    fn skips_callback_unavailable_ports_used_for_excluded_ranges() {
+        let reserved = HashSet::new();
+        let excluded = [10914u16, 11013];
+        let port = find_next_available_port(10910, &reserved, |candidate| {
+            !excluded.contains(&candidate) && candidate != 10910
+        });
+        assert_eq!(port, Some(10911));
+        let port = find_next_available_port(10913, &reserved, |candidate| candidate < 10914 || candidate > 11013);
+        assert_eq!(port, Some(11014));
+    }
 }

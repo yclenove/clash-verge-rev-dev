@@ -5,6 +5,7 @@ import {
   getLogRangeStart,
   getLogTotalPages,
   mergeInitialLogs,
+  mergeLiveAndHistoryLogs,
 } from './use-log-data'
 
 const log = (time: string, type: string, payload: string): ILogItem => ({
@@ -56,7 +57,6 @@ describe('getLogRangeStart', () => {
   })
 })
 
-
 describe('log pagination bounds', () => {
   test('computes finite page counts from the filtered total', () => {
     expect(getLogTotalPages(0)).toBe(1)
@@ -69,5 +69,76 @@ describe('log pagination bounds', () => {
     expect(canLoadNextLogPage(7, 8144, 1001)).toBe(true)
     expect(canLoadNextLogPage(7, 8144, 1000)).toBe(false)
     expect(canLoadNextLogPage(8, 8144, 144)).toBe(false)
+  })
+})
+
+describe('mergeLiveAndHistoryLogs', () => {
+  const history = [log('08-15 10:00:00', 'warning', 'old')]
+  const live = [log('08-15 10:01:00', 'warning', 'live')]
+
+  test('appends live lines after history on the last ascending page', () => {
+    expect(
+      mergeLiveAndHistoryLogs(history, live, {
+        range: 'today',
+        page: 0,
+        descending: false,
+        hasNextPage: false,
+      }),
+    ).toEqual([...history, ...live])
+  })
+
+  test('keeps live lines when ascending history already fills the page', () => {
+    const fullHistory = [
+      log('08-15 10:00:00', 'warning', 'old-1'),
+      log('08-15 10:00:01', 'warning', 'old-2'),
+    ]
+    expect(
+      mergeLiveAndHistoryLogs(fullHistory, live, {
+        range: 'today',
+        page: 0,
+        descending: false,
+        hasNextPage: false,
+        pageSize: 2,
+      }),
+    ).toEqual([fullHistory[1], live[0]])
+  })
+
+  test('does not merge live lines onto an earlier ascending page', () => {
+    expect(
+      mergeLiveAndHistoryLogs(history, live, {
+        range: 'today',
+        page: 0,
+        descending: false,
+        hasNextPage: true,
+      }),
+    ).toEqual(history)
+  })
+
+  test('prepends live lines before history in descending order', () => {
+    expect(
+      mergeLiveAndHistoryLogs(history, live, {
+        range: 'today',
+        page: 0,
+        descending: true,
+      }),
+    ).toEqual([...live, ...history])
+  })
+
+  test('does not merge live lines on later pages or older ranges', () => {
+    expect(
+      mergeLiveAndHistoryLogs(history, live, {
+        range: 'today',
+        page: 1,
+        descending: true,
+      }),
+    ).toEqual(history)
+    expect(
+      mergeLiveAndHistoryLogs(history, live, {
+        range: 'last3',
+        page: 0,
+        descending: false,
+        hasNextPage: false,
+      }),
+    ).toEqual(history)
   })
 })

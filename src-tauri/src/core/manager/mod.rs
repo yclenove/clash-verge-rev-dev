@@ -246,6 +246,22 @@ impl CoreManager {
         self.config_update_in_progress.store(false, Ordering::Release);
     }
 
+    pub(crate) fn config_update_in_progress(&self) -> bool {
+        self.config_update_in_progress.load(Ordering::Acquire)
+    }
+
+    pub(crate) async fn wait_for_config_update_slot(&self) -> bool {
+        use crate::constants::timing;
+        let deadline = tokio::time::Instant::now() + timing::CONFIG_UPDATE_BUSY_WAIT;
+        while tokio::time::Instant::now() < deadline {
+            if !self.config_update_in_progress() {
+                return true;
+            }
+            tokio::time::sleep(timing::CONFIG_UPDATE_BUSY_POLL).await;
+        }
+        !self.config_update_in_progress()
+    }
+
     pub async fn init(&self) -> Result<bool> {
         const MAX_PORT_FALLBACK_RETRIES: usize = 3;
 

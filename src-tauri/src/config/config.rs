@@ -6,7 +6,7 @@ use crate::{
         CoreManager,
         handle::{self, Handle},
         tray,
-        validate::CoreConfigValidator,
+        validate::{CoreConfigValidator, ValidationOutcome},
     },
     enhance,
     process::AsyncHandler,
@@ -180,8 +180,10 @@ impl Config {
             match CoreConfigValidator::global().validate_config_outcome().await {
                 Ok(outcome) if outcome.is_valid() => {
                     logging!(info, Type::Config, "配置验证成功");
-                    // 前端没有必要知道验证成功的消息，也没有事件驱动
-                    // Some(("config_validate::success", String::new()))
+                    Ok(None)
+                }
+                Ok(ValidationOutcome::Busy) => {
+                    logging!(warn, Type::Config, "[首次启动] 配置验证仍在进行中，继续使用已生成配置");
                     Ok(None)
                 }
                 Ok(outcome) => {

@@ -190,10 +190,16 @@ impl CoreManager {
     }
 
     pub async fn update_config_forced(&self) -> Result<ValidationOutcome> {
-        self.update_config_with_force(true).await
+        // Do not wait: callers such as profile switch have already staged a draft.
+        // Waiting here would let another apply observe that draft, then Busy-rollback it.
+        self.update_config_inner(true, false).await
     }
 
     pub async fn update_config_with_force(&self, force: bool) -> Result<ValidationOutcome> {
+        self.update_config_inner(force, force).await
+    }
+
+    async fn update_config_inner(&self, force: bool, wait_if_busy: bool) -> Result<ValidationOutcome> {
         if handle::Handle::global().is_exiting() {
             return Ok(ValidationOutcome::Skipped {
                 reason: ValidationSkipReason::Exiting,
@@ -201,8 +207,16 @@ impl CoreManager {
         }
 
         if !self.try_start_config_update() {
-            logging!(info, Type::Core, "配置更新已在进行中");
-            return Ok(ValidationOutcome::Busy);
+            if wait_if_busy {
+                logging!(info, Type::Core, "配置更新已在进行中，等待后重试");
+                if !(self.wait_for_config_update_slot().await && self.try_start_config_update()) {
+                    logging!(info, Type::Core, "配置更新仍在进行中");
+                    return Ok(ValidationOutcome::Busy);
+                }
+            } else {
+                logging!(info, Type::Core, "配置更新已在进行中");
+                return Ok(ValidationOutcome::Busy);
+            }
         }
         defer! {
             self.finish_config_update();
@@ -281,6 +295,10 @@ impl CoreManager {
     /// Every way out of here other than the last line rolls that staging back.
     async fn validate_and_apply(&self, transaction: DraftTransaction<'_>) -> Result<ValidationOutcome> {
         let outcome = CoreConfigValidator::global().validate_config_outcome().await?;
+        if matches!(outcome, ValidationOutcome::Busy) {
+            logging!(info, Type::Core, "配置校验仍在进行中，放弃本次 apply 且不提交草稿");
+            return Ok(outcome);
+        }
         if !outcome.is_valid() {
             return Ok(outcome);
         }

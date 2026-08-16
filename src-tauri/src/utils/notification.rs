@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 
 use crate::core::handle;
-use clash_verge_i18n;
 use crate::platform_plugins::notification::NotificationExt as _;
+use clash_verge_i18n;
 
 pub enum NotificationEvent<'a> {
     DashboardToggled,

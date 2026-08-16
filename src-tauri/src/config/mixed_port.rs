@@ -15,7 +15,7 @@
 use anyhow::Result;
 
 use super::Config;
-use crate::core::handle::Handle;
+use crate::core::{CoreManager, handle::Handle, manager::RunningMode};
 
 /// The port mihomo listens on when nothing else is configured.
 pub const DEFAULT_MIXED_PORT: u16 = 7897;
@@ -49,12 +49,38 @@ impl MixedPort {
     /// which is the right answer whenever the Core is not running anyway.
     pub async fn effective() -> u16 {
         let desired = Self::desired().await;
+        if matches!(*CoreManager::global().get_running_mode(), RunningMode::NotRunning) {
+            return desired;
+        }
+        if let Err(error) = point_mihomo_client_at_running_core() {
+            logging_mihomo_ipc_warn(&error);
+            return desired;
+        }
         resolve_effective(
             || async { Ok(Handle::mihomo().get_base_config().await?.mixed_port) },
             desired,
         )
         .await
     }
+}
+
+fn point_mihomo_client_at_running_core() -> Result<()> {
+    let path = match *CoreManager::global().get_running_mode() {
+        RunningMode::Service => crate::utils::dirs::ipc_path()?,
+        RunningMode::Sidecar => crate::utils::dirs::sidecar_ipc_path()?,
+        RunningMode::NotRunning => return Ok(()),
+    };
+    Handle::mihomo()
+        .update_socket_path(crate::utils::dirs::path_to_str(&path)?.to_owned())
+        .map_err(|error| anyhow::anyhow!("{error}"))
+}
+
+fn logging_mihomo_ipc_warn(error: &anyhow::Error) {
+    clash_verge_logging::logging!(
+        warn,
+        clash_verge_logging::Type::Config,
+        "Unable to point mihomo client at the running core IPC: {error:#}"
+    );
 }
 
 /// Prefer what the user selected, else what the Merge Config resolved to.

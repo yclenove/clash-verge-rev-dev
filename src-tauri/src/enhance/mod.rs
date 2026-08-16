@@ -17,6 +17,7 @@ use crate::utils::dirs;
 use crate::{
     config::{Config, IVerge, PrfItem},
     constants,
+    core::handle,
     utils::{help, tmpl},
 };
 use anyhow::{Context as _, Result};
@@ -175,10 +176,22 @@ async fn collect_profile_items() -> Result<ProfileItems> {
         }
     };
 
-    let current = profiles_arc
-        .current_mapping()
-        .await
-        .with_context(|| format!("failed to read current profile \"{current_profile_uid}\""))?;
+    let current = match profiles_arc.current_mapping().await {
+        Ok(mapping) => mapping,
+        Err(err) => {
+            let message = format!("{err:#}");
+            if message.contains("file not found") || message.contains("failed to find the current profile") {
+                logging!(
+                    warn,
+                    Type::Config,
+                    "failed to read current profile \"{current_profile_uid}\": {message}; skipping enhance"
+                );
+                handle::Handle::notice_message("config_validate::file_not_found", message);
+                return Ok(ProfileItems::default());
+            }
+            return Err(err).with_context(|| format!("failed to read current profile \"{current_profile_uid}\""));
+        }
+    };
 
     let current_item = match profiles_arc.get_item(&current_profile_uid) {
         Ok(item) => item,
@@ -859,11 +872,7 @@ async fn merge_other_profiles(mut config: Mapping) -> Mapping {
     config
 }
 
-fn inject_merged_names_into_groups(
-    config: &mut Mapping,
-    new_names: &[Value],
-    include_urltest: bool,
-) {
+fn inject_merged_names_into_groups(config: &mut Mapping, new_names: &[Value], include_urltest: bool) {
     let Some(Value::Sequence(groups)) = config.get_mut(Value::from("proxy-groups")) else {
         return;
     };
@@ -1611,8 +1620,8 @@ mod authoritative_field_tests {
 #[cfg(test)]
 mod tests {
     use super::{
-        ChainItem, ChainType, cleanup_proxy_groups, ensure_lan_bind_address,
-        inject_merged_names_into_groups, process_global_items, process_profile_items, use_keys,
+        ChainItem, ChainType, cleanup_proxy_groups, ensure_lan_bind_address, inject_merged_names_into_groups,
+        process_global_items, process_profile_items, use_keys,
     };
     use std::collections::HashMap;
 
@@ -2016,18 +2025,30 @@ proxy-groups:
   - { name: AUTO, type: url-test, proxies: [a], url: http://www.gstatic.com/generate_204 }
 "#,
         );
-        inject_merged_names_into_groups(
-            &mut config,
-            &[serde_yaml_ng::Value::from("other")],
-            false,
-        );
+        inject_merged_names_into_groups(&mut config, &[serde_yaml_ng::Value::from("other")], false);
         let groups = config
             .get("proxy-groups")
             .and_then(serde_yaml_ng::Value::as_sequence)
             .unwrap();
         let select = groups[0].as_mapping().unwrap();
         let urltest = groups[1].as_mapping().unwrap();
-        assert!(select.get("proxies").unwrap().as_sequence().unwrap().iter().any(|v| v.as_str() == Some("other")));
-        assert!(!urltest.get("proxies").unwrap().as_sequence().unwrap().iter().any(|v| v.as_str() == Some("other")));
+        assert!(
+            select
+                .get("proxies")
+                .unwrap()
+                .as_sequence()
+                .unwrap()
+                .iter()
+                .any(|v| v.as_str() == Some("other"))
+        );
+        assert!(
+            !urltest
+                .get("proxies")
+                .unwrap()
+                .as_sequence()
+                .unwrap()
+                .iter()
+                .any(|v| v.as_str() == Some("other"))
+        );
     }
 }

@@ -100,6 +100,7 @@ async fn sync_service_logs(store: &log_store::SqliteLogStore) -> Result<()> {
                 .map(|line| log_store::parse_sidecar_line(line.as_str(), "core"))
                 .collect::<Vec<_>>();
             let overlaps_sqlite = match entries.first() {
+                Some(oldest) if oldest.ts < store.cleared_at() => true,
                 Some(oldest) => store.contains_log_entry(oldest).await?,
                 None => true,
             };

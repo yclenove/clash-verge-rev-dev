@@ -73,10 +73,13 @@ pub fn handle_validation_notice(outcome: &ValidationOutcome, target: ValidationN
             logging!(warn, Type::Config, "{} 验证失败: {}", file_type, message);
             handle::Handle::notice_message(status, message.to_owned());
         }
-        ValidationOutcome::Busy | ValidationOutcome::Skipped { .. } => {
+        ValidationOutcome::Busy => {
+            let message = outcome.to_string();
+            logging!(info, Type::Config, "{} 验证进行中: {}", file_type, message);
+        }
+        ValidationOutcome::Skipped { .. } => {
             let message = outcome.to_string();
             logging!(warn, Type::Config, "{} 验证跳过: {}", file_type, message);
-            handle::Handle::notice_message("config_validate::error", message);
         }
         ValidationOutcome::Valid => {}
     }

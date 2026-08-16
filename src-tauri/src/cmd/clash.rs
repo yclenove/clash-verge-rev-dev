@@ -7,6 +7,7 @@ use crate::{
     constants,
     core::{
         CoreManager, handle, log_store,
+        manager::CLASH_LOGGER,
         validate::{CoreConfigValidator, ValidationOutcome},
     },
 };
@@ -331,4 +332,40 @@ pub async fn clear_traffic_history() -> CmdResult<usize> {
         return Err("sqlite log store is unavailable".into());
     };
     store.clear_traffic_history().await.stringify_err()
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct IncomingClashLog {
+    pub ts: i64,
+    pub level: std::string::String,
+    #[serde(default = "default_clash_log_source")]
+    pub source: std::string::String,
+    pub payload: std::string::String,
+}
+
+fn default_clash_log_source() -> std::string::String {
+    std::string::String::from("core")
+}
+
+#[tauri::command]
+pub async fn append_clash_logs(entries: Vec<IncomingClashLog>) -> CmdResult<usize> {
+    log_store::init_global().stringify_err()?;
+    let Some(store) = log_store::get() else {
+        return Err("sqlite log store is unavailable".into());
+    };
+    let mapped = entries
+        .into_iter()
+        .map(|entry| log_store::LogEntry::new(entry.ts, entry.level, entry.source, entry.payload))
+        .collect();
+    store.append_entries(mapped).await.stringify_err()
+}
+
+#[tauri::command]
+pub async fn clear_clash_logs() -> CmdResult<usize> {
+    log_store::init_global().stringify_err()?;
+    CLASH_LOGGER.clear_logs().await;
+    let Some(store) = log_store::get() else {
+        return Err("sqlite log store is unavailable".into());
+    };
+    store.clear_logs().await.stringify_err()
 }

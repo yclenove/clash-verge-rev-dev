@@ -1,7 +1,4 @@
-use crate::{
-    config::Config,
-    core::handle::Handle,
-};
+use crate::{config::Config, core::handle::Handle};
 use anyhow::{Result, bail};
 use clash_verge_logging::{Type, logging};
 use once_cell::sync::Lazy;
@@ -69,12 +66,7 @@ pub(crate) fn read_app_http_proxy() -> Result<Option<(String, u16, Vec<String>)>
             exclusion.push(item);
         }
     }
-    logging!(
-        info,
-        Type::Network,
-        "OHOS app http proxy active {host}:{}",
-        proxy.port
-    );
+    logging!(info, Type::Network, "OHOS app http proxy active {host}:{}", proxy.port);
     Ok(Some((host, proxy.port, exclusion)))
 }
 

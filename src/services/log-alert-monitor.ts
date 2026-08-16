@@ -7,6 +7,7 @@
 import { MihomoWebSocket } from 'tauri-plugin-mihomo-api'
 
 import { ingestLogAlert } from '@/services/log-alert-store'
+import { persistHighSeverityClashLogs } from '@/services/persist-clash-logs'
 
 const RECONNECT_DELAY_MS = 2_000
 const STALE_SOCKET_MS = 120_000
@@ -97,8 +98,9 @@ const connectLogAlertSocket = async () => {
         return
       }
       try {
-        const parsed = JSON.parse(data) as { type?: string }
+        const parsed = JSON.parse(data) as { type?: string; payload?: string }
         ingestLogAlert(parsed?.type)
+        persistHighSeverityClashLogs([parsed])
       } catch {
         // ignore malformed frames
       }

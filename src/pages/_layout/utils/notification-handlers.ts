@@ -53,6 +53,8 @@ export const handleNoticeMessage = (
       ),
     'reactivate_profiles::error': () => showNotice.error(msg),
     update_failed: () => showNotice.error(msg),
+    update_busy: () =>
+      showNotice.info('profiles.page.feedback.notifications.updateBusy'),
     'config_validate::boot_error': () =>
       showNotice.error('shared.feedback.validation.config.bootFailed', msg),
     'config_validate::core_change': () =>

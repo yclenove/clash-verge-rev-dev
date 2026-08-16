@@ -94,6 +94,9 @@ impl ListenerBindScope {
     }
 
     pub(crate) fn mixed_port_is_available(&self, port: u16) -> bool {
+        if crate::utils::excluded_ports::system_excluded_port_ranges().contains(port) {
+            return false;
+        }
         let claims = self
             .addresses
             .iter()
@@ -408,6 +411,8 @@ fn is_bind_conflict(error: &io::Error) -> bool {
     {
         use windows_sys::Win32::Networking::WinSock::WSAEACCES;
 
+        // Hyper-V / excludedportrange surfaces as WSAEACCES; treat it as unavailable
+        // the same way AddrInUse is treated, so fallback never lands in a blocked range.
         error.raw_os_error() == Some(WSAEACCES)
     }
     #[cfg(not(windows))]

@@ -47,6 +47,7 @@
         "profileSwitched": "Base config updated",
         "profileReactivated": "Profile Reactivated",
         "switchBusy": "Profile switch is already in progress",
+        "updateBusy": "A configuration update is already in progress",
         "batchDeleted": "Selected profiles deleted successfully"
       },
       "notices": {

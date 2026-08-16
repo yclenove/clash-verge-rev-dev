@@ -1,10 +1,10 @@
+use crate::platform_plugins::clipboard_manager::ClipboardExt as _;
 use crate::{
     config::{Config, IVerge, MixedPort},
     core::handle,
 };
 use clash_verge_logging::{Type, logging};
 use std::env;
-use crate::platform_plugins::clipboard_manager::ClipboardExt as _;
 
 #[cfg(target_env = "ohos")]
 pub async fn toggle_system_proxy() -> bool {

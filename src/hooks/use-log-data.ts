@@ -2,9 +2,14 @@ import dayjs from 'dayjs'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { MihomoWebSocket, type LogLevel } from 'tauri-plugin-mihomo-api'
 
-import { getClashLogs, type ClashLogItem } from '@/services/cmds'
+import {
+  clearClashLogs,
+  getClashLogs,
+  type ClashLogItem,
+} from '@/services/cmds'
 import { recordHighSeverityAlert } from '@/services/log-alert-rate'
 import { isHighSeverityLogType } from '@/services/log-alert-store'
+import { persistHighSeverityClashLogs } from '@/services/persist-clash-logs'
 import { setCacheData } from '@/services/query-client'
 
 import { useClashLog } from './use-clash-log'
@@ -78,6 +83,58 @@ const appendLogs = (
 const logIdentity = (log: ILogItem): string =>
   `${log.time ?? ''}|${log.type}|${log.payload}`
 
+export const mergeLiveAndHistoryLogs = (
+  history: ILogItem[],
+  live: ILogItem[],
+  options: {
+    range: LogRangePreset
+    page: number
+    descending: boolean
+    pageSize?: number
+    hasNextPage?: boolean
+  },
+): ILogItem[] => {
+  const pageSize = options.pageSize ?? LOG_PAGE_SIZE
+  const includeLive =
+    options.range === 'today' &&
+    (options.descending ? options.page === 0 : options.hasNextPage !== true)
+  if (!includeLive) {
+    return history
+  }
+
+  const seen = new Set<string>()
+  const combined: ILogItem[] = []
+  const add = (log: ILogItem) => {
+    const identity = logIdentity(log)
+    if (seen.has(identity)) return
+    seen.add(identity)
+    combined.push(log)
+  }
+
+  if (options.descending) {
+    for (let i = live.length - 1; i >= 0; i--) {
+      add(live[i])
+      if (combined.length >= pageSize) return combined
+    }
+    for (const log of history) {
+      add(log)
+      if (combined.length >= pageSize) break
+    }
+    return combined
+  }
+
+  for (const log of history) {
+    add(log)
+  }
+  for (const log of live) {
+    add(log)
+  }
+  if (combined.length > pageSize) {
+    return combined.slice(combined.length - pageSize)
+  }
+  return combined
+}
+
 export const mergeInitialLogs = (
   current: ILogItem[] | undefined,
   history: ILogItem[],
@@ -143,7 +200,7 @@ export const useLogData = ({ level, range, order }: UseLogDataOptions) => {
     connect: () => MihomoWebSocket.connect_logs(logLevel),
     setupHandlers: ({ next, scheduleReconnect, isMounted }) => {
       let flushTimer: ReturnType<typeof setTimeout> | null = null
-      const buffer: ILogItem[] = []
+      const buffer: Array<ILogItem & { ts: number }> = []
 
       const clearFlushTimer = () => {
         if (flushTimer) {
@@ -164,7 +221,13 @@ export const useLogData = ({ level, range, order }: UseLogDataOptions) => {
           return
         }
         const pendingLogs = buffer.splice(0, buffer.length)
-        next(null, (current) => appendLogs(current, pendingLogs))
+        persistHighSeverityClashLogs(pendingLogs)
+        next(null, (current) =>
+          appendLogs(
+            current,
+            pendingLogs.map(({ ts: _ts, ...log }) => log),
+          ),
+        )
         flushTimer = null
       }
 
@@ -187,8 +250,9 @@ export const useLogData = ({ level, range, order }: UseLogDataOptions) => {
             if (isHighSeverityLogType(normalizedType)) {
               recordHighSeverityAlert()
             }
-            parsed.time = dayjs().format('MM-DD HH:mm:ss')
-            buffer.push(parsed)
+            const ts = Date.now()
+            parsed.time = dayjs(ts).format('MM-DD HH:mm:ss')
+            buffer.push({ ...parsed, ts })
             if (buffer.length > MAX_LIVE_LOG_NUM) {
               buffer.splice(0, buffer.length - MAX_LIVE_LOG_NUM)
             }
@@ -290,11 +354,12 @@ export const useLogData = ({ level, range, order }: UseLogDataOptions) => {
   }, [hasNextPage, loadPage, page])
 
   const refreshGetClashLog = useCallback(
-    (clear = false) => {
+    async (clear = false) => {
       if (!clear) {
         void loadPage(0, true)
         return
       }
+      await clearClashLogs()
       requestIdRef.current += 1
       loadingHistoryRef.current = false
       cursorsRef.current = [null]

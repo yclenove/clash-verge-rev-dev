@@ -1,3 +1,4 @@
+use crate::platform_plugins::shell::ShellExt as _;
 use anyhow::Result;
 use scopeguard::defer;
 use serde::Serialize;
@@ -6,7 +7,6 @@ use std::{
     fmt,
     sync::atomic::{AtomicBool, Ordering},
 };
-use crate::platform_plugins::shell::ShellExt as _;
 use tokio::fs;
 
 use crate::config::{Config, ConfigType};
@@ -129,6 +129,22 @@ impl CoreConfigValidator {
 
     pub fn finish(&self) {
         self.is_processing.store(false, Ordering::Release)
+    }
+
+    pub fn is_processing(&self) -> bool {
+        self.is_processing.load(Ordering::Acquire)
+    }
+
+    async fn wait_for_idle(&self) -> bool {
+        use crate::constants::timing;
+        let deadline = tokio::time::Instant::now() + timing::CONFIG_UPDATE_BUSY_WAIT;
+        while tokio::time::Instant::now() < deadline {
+            if !self.is_processing() {
+                return true;
+            }
+            tokio::time::sleep(timing::CONFIG_UPDATE_BUSY_POLL).await;
+        }
+        !self.is_processing()
     }
 }
 
@@ -398,8 +414,11 @@ impl CoreConfigValidator {
     /// 验证运行时配置
     pub async fn validate_config_outcome(&self) -> Result<ValidationOutcome> {
         if !self.try_start() {
-            logging!(info, Type::Validate, "验证已在进行中，跳过新的验证请求");
-            return Ok(ValidationOutcome::Busy);
+            logging!(info, Type::Validate, "验证已在进行中，等待进行中的校验结束");
+            if !self.wait_for_idle().await || !self.try_start() {
+                logging!(info, Type::Validate, "验证仍在进行中，跳过新的验证请求");
+                return Ok(ValidationOutcome::Busy);
+            }
         }
         defer! {
             self.finish();
@@ -438,3 +457,26 @@ fn contains_any_keyword<'a>(buf: &'a [u8], keywords: &'a [&str]) -> bool {
 }
 
 singleton!(CoreConfigValidator, CORECONFIGVALIDATOR);
+
+#[cfg(test)]
+mod tests {
+    use super::{CoreConfigValidator, ValidationOutcome};
+
+    #[test]
+    fn try_start_rejects_overlapping_validation() {
+        let validator = CoreConfigValidator::new();
+        assert!(validator.try_start());
+        assert!(!validator.try_start());
+        validator.finish();
+        assert!(validator.try_start());
+        validator.finish();
+    }
+
+    #[test]
+    fn busy_display_is_stable() {
+        assert_eq!(
+            ValidationOutcome::Busy.to_string(),
+            "Configuration validation is already running"
+        );
+    }
+}

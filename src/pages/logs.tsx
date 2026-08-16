@@ -32,13 +32,12 @@ import { useClashLog } from '@/hooks/use-clash-log'
 import {
   LOG_PAGE_SIZE,
   type LogRangePreset,
+  mergeLiveAndHistoryLogs,
   normalizeLogType,
   useLogData,
 } from '@/hooks/use-log-data'
+import { showNotice } from '@/services/notice-service'
 import { buildClashLogSearchText } from '@/utils/translate-clash-log'
-
-const logIdentity = (log: ILogItem) =>
-  `${log.time ?? ''}|${log.type}|${log.payload}`
 
 const LogPage = () => {
   const { t, i18n } = useTranslation()
@@ -95,29 +94,23 @@ const LogPage = () => {
     [liveLogs, matchesLog],
   )
 
-  const filteredLogs = useMemo(() => {
-    if (rangePreset !== 'today' || page !== 0 || !isDescending) {
-      return filteredHistory
-    }
-
-    const seen = new Set<string>()
-    const combined: ILogItem[] = []
-    const add = (log: ILogItem) => {
-      const identity = logIdentity(log)
-      if (seen.has(identity)) return
-      seen.add(identity)
-      combined.push(log)
-    }
-    for (let i = filteredLive.length - 1; i >= 0; i--) {
-      add(filteredLive[i])
-      if (combined.length >= LOG_PAGE_SIZE) return combined
-    }
-    for (const log of filteredHistory) {
-      add(log)
-      if (combined.length >= LOG_PAGE_SIZE) break
-    }
-    return combined
-  }, [filteredHistory, filteredLive, isDescending, page, rangePreset])
+  const filteredLogs = useMemo(
+    () =>
+      mergeLiveAndHistoryLogs(filteredHistory, filteredLive, {
+        range: rangePreset,
+        page,
+        descending: isDescending,
+        hasNextPage,
+      }),
+    [
+      filteredHistory,
+      filteredLive,
+      hasNextPage,
+      isDescending,
+      page,
+      rangePreset,
+    ],
+  )
 
   const virtuosoRef = useRef<VirtualListHandle>(null)
   useEffect(() => {
@@ -194,7 +187,11 @@ const LogPage = () => {
           <Button
             size="small"
             variant="contained"
-            onClick={() => refreshGetClashLog(true)}
+            onClick={() => {
+              void refreshGetClashLog(true).catch((error) => {
+                showNotice.error(error)
+              })
+            }}
           >
             {t('shared.actions.clear')}
           </Button>

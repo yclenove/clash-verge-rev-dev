@@ -2,8 +2,8 @@ use std::ffi::{CStr, CString, c_char, c_int, c_uint};
 use std::ptr::null_mut;
 
 use tauri::{
-    plugin::{Builder, TauriPlugin},
     AppHandle, Manager, Runtime,
+    plugin::{Builder, TauriPlugin},
 };
 
 #[derive(Debug, thiserror::Error, serde::Serialize)]
@@ -44,8 +44,7 @@ unsafe extern "C" {
     fn OH_Pasteboard_Destroy(pasteboard: *mut PasteboardOpaque);
     fn OH_Pasteboard_SetData(pasteboard: *mut PasteboardOpaque, data: *mut UdmfDataOpaque) -> c_int;
     fn OH_Pasteboard_ClearData(pasteboard: *mut PasteboardOpaque) -> c_int;
-    fn OH_Pasteboard_GetData(pasteboard: *mut PasteboardOpaque, status: *mut c_int)
-        -> *mut UdmfDataOpaque;
+    fn OH_Pasteboard_GetData(pasteboard: *mut PasteboardOpaque, status: *mut c_int) -> *mut UdmfDataOpaque;
 }
 
 #[link(name = "udmf")]
@@ -53,18 +52,11 @@ unsafe extern "C" {
     fn OH_UdmfData_Create() -> *mut UdmfDataOpaque;
     fn OH_UdmfData_Destroy(data: *mut UdmfDataOpaque);
     fn OH_UdmfData_AddRecord(data: *mut UdmfDataOpaque, record: *mut UdmfRecordOpaque) -> c_int;
-    fn OH_UdmfData_GetRecords(
-        data: *mut UdmfDataOpaque,
-        count: *mut c_uint,
-    ) -> *mut *mut UdmfRecordOpaque;
+    fn OH_UdmfData_GetRecords(data: *mut UdmfDataOpaque, count: *mut c_uint) -> *mut *mut UdmfRecordOpaque;
     fn OH_UdmfRecord_Create() -> *mut UdmfRecordOpaque;
     fn OH_UdmfRecord_Destroy(record: *mut UdmfRecordOpaque);
-    fn OH_UdmfRecord_AddPlainText(record: *mut UdmfRecordOpaque, plain: *mut UdsPlainTextOpaque)
-        -> c_int;
-    fn OH_UdmfRecord_GetPlainText(
-        record: *mut UdmfRecordOpaque,
-        plain: *mut *mut UdsPlainTextOpaque,
-    ) -> c_int;
+    fn OH_UdmfRecord_AddPlainText(record: *mut UdmfRecordOpaque, plain: *mut UdsPlainTextOpaque) -> c_int;
+    fn OH_UdmfRecord_GetPlainText(record: *mut UdmfRecordOpaque, plain: *mut *mut UdsPlainTextOpaque) -> c_int;
     fn OH_UdsPlainText_Create() -> *mut UdsPlainTextOpaque;
     fn OH_UdsPlainText_Destroy(plain: *mut UdsPlainTextOpaque);
     fn OH_UdsPlainText_SetContent(plain: *mut UdsPlainTextOpaque, content: *const c_char) -> c_int;
@@ -155,9 +147,7 @@ fn read_pasteboard_text() -> Result<String> {
             if unsafe { OH_UdmfRecord_GetPlainText(record, &mut plain) } == 0 && !plain.is_null() {
                 let content = unsafe { OH_UdsPlainText_GetContent(plain) };
                 if !content.is_null() {
-                    let text = unsafe { CStr::from_ptr(content) }
-                        .to_string_lossy()
-                        .into_owned();
+                    let text = unsafe { CStr::from_ptr(content) }.to_string_lossy().into_owned();
                     result = Some(text);
                     unsafe { OH_UdsPlainText_Destroy(plain) };
                     break;
@@ -220,9 +210,7 @@ impl<R: Runtime, T: Manager<R>> ClipboardExt<R> for T {
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("cv-tauri-plugin-clipboard-manager")
         .setup(|app, _api| {
-            app.manage(Clipboard {
-                app: app.clone(),
-            });
+            app.manage(Clipboard { app: app.clone() });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![write_text, read_text, clear])
