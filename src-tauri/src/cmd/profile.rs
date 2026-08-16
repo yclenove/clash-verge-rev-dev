@@ -516,6 +516,7 @@ pub async fn get_next_update_time(uid: String) -> CmdResult<Option<i64>> {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::{
         commit_current_profile, persist_deleted_profile, restore_profiles_snapshot,

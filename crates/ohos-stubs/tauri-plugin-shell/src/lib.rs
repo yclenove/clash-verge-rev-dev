@@ -1,3 +1,5 @@
+#![cfg(any(unix, target_env = "ohos"))]
+
 use std::{
     ffi::{CString, OsStr},
     io::{BufRead, BufReader, Read},

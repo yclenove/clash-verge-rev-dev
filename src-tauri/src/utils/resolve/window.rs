@@ -22,8 +22,10 @@ const DEFAULT_HEIGHT: f64 = 700.0;
 const MINIMAL_WIDTH: f64 = 520.0;
 const MINIMAL_HEIGHT: f64 = 520.0;
 
+#[allow(dead_code)]
 #[cfg(all(target_os = "linux", not(target_env = "ohos")))]
 const DEFAULT_DECORATIONS: bool = false;
+#[allow(dead_code)]
 #[cfg(not(all(target_os = "linux", not(target_env = "ohos"))))]
 const DEFAULT_DECORATIONS: bool = true;
 

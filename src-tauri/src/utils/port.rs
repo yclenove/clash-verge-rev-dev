@@ -59,7 +59,7 @@ mod tests {
             !excluded.contains(&candidate) && candidate != 10910
         });
         assert_eq!(port, Some(10911));
-        let port = find_next_available_port(10913, &reserved, |candidate| candidate < 10914 || candidate > 11013);
+        let port = find_next_available_port(10913, &reserved, |candidate| !(10914..=11013).contains(&candidate));
         assert_eq!(port, Some(11014));
     }
 }

@@ -274,6 +274,7 @@ pub async fn validate_dns_config() -> CmdResult<ValidationOutcome> {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn get_clash_logs(
     from_ts: Option<i64>,
     to_ts: Option<i64>,

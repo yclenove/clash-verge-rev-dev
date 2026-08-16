@@ -1,13 +1,21 @@
+#![allow(
+    clippy::clone_on_ref_ptr,
+    clippy::expect_used,
+    clippy::significant_drop_tightening,
+    clippy::type_complexity,
+    clippy::unwrap_used
+)]
+
 use crate::utils::dirs;
-use anyhow::{Context, Result};
+use anyhow::{Context as _, Result};
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone as _};
 use once_cell::sync::OnceCell;
 use regex::Regex;
-use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
+use rusqlite::{Connection, OptionalExtension as _, params, params_from_iter};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet, VecDeque, hash_map::DefaultHasher},
-    hash::{Hash, Hasher},
+    hash::{Hash as _, Hasher as _},
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex as StdMutex, OnceLock,
@@ -718,10 +726,10 @@ impl SqliteLogStore {
             tokio::pin!(notified);
             let _ = tokio::time::timeout(FLUSH_INTERVAL, notified.as_mut()).await;
             let batch = self.drain_batch(LOG_BATCH_MAX);
-            if !batch.is_empty() {
-                if let Err(err) = self.flush(batch).await {
-                    log::warn!("[LogStore] flush failed: {err:#}");
-                }
+            if !batch.is_empty()
+                && let Err(err) = self.flush(batch).await
+            {
+                log::warn!("[LogStore] flush failed: {err:#}");
             }
             if last_prune.elapsed().unwrap_or_default() >= RETENTION_PRUNE_INTERVAL {
                 if let Err(err) = self.prune_expired().await {
@@ -1564,7 +1572,7 @@ pub fn parse_sidecar_line(line: &str, source: &str) -> LogEntry {
     }
 
     static PREFIX_RE: OnceCell<Regex> = OnceCell::new();
-    let prefix_re = PREFIX_RE.get_or_init(|| Regex::new(r#"^\[([^]]+)]\s*(.*)$"#).expect("valid prefixed log regex"));
+    let prefix_re = PREFIX_RE.get_or_init(|| Regex::new(r"^\[([^]]+)]\s*(.*)$").expect("valid prefixed log regex"));
     if let Some(caps) = prefix_re.captures(line) {
         let parsed = NaiveDateTime::parse_from_str(&caps[1], "%Y-%m-%d %H:%M:%S%.3f")
             .or_else(|_| NaiveDateTime::parse_from_str(&caps[1], "%Y-%m-%d %H:%M:%S"));
@@ -1581,7 +1589,7 @@ pub fn parse_sidecar_line(line: &str, source: &str) -> LogEntry {
 fn parse_log_route(payload: &str) -> Option<(i64, String, String, i64)> {
     static RE: OnceCell<Regex> = OnceCell::new();
     let re = RE.get_or_init(|| {
-        Regex::new(r#"([0-9.]+):(\d+)\(([^)]+)\)\s+-->\s+([^\s:]+):(\d+)"#).expect("valid log identity regex")
+        Regex::new(r"([0-9.]+):(\d+)\(([^)]+)\)\s+-->\s+([^\s:]+):(\d+)").expect("valid log identity regex")
     });
     let caps = re.captures(payload)?;
     Some((

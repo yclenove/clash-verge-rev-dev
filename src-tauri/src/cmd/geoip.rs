@@ -1,6 +1,6 @@
 use super::CmdResult;
 use crate::utils::dirs;
-use futures::StreamExt;
+use futures::StreamExt as _;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::IpAddr;

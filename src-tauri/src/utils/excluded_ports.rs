@@ -20,7 +20,7 @@ impl ExcludedPortRanges {
         self.ranges.iter().any(|&(start, end)| port >= start && port <= end)
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.ranges.is_empty()
     }
 }
@@ -47,7 +47,7 @@ pub fn query_system_excluded_port_ranges() -> ExcludedPortRanges {
         for (iface, proto) in [("ipv4", "tcp"), ("ipv4", "udp"), ("ipv6", "tcp"), ("ipv6", "udp")] {
             ranges.extend(query_netsh_excludedportrange(iface, proto));
         }
-        return ExcludedPortRanges::from_ranges(ranges);
+        ExcludedPortRanges::from_ranges(ranges)
     }
     #[cfg(not(windows))]
     ExcludedPortRanges::default()

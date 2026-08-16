@@ -155,10 +155,11 @@ impl CoreManager {
         use crate::constants::files::RUNTIME_CONFIG;
 
         let runtime_path = dirs::app_home_dir()?.join(RUNTIME_CONFIG);
-        let mut clash_config = Config::clash().await.latest_arc().0.clone();
+        let clash_config = Config::clash().await.latest_arc().0.clone();
 
         #[cfg(target_env = "ohos")]
-        {
+        let clash_config = {
+            let mut clash_config = clash_config;
             clash_config.insert("external-controller".into(), "127.0.0.1:9090".into());
             clash_config.remove("external-controller-unix");
             clash_config.remove("external-controller-pipe");
@@ -172,7 +173,8 @@ impl CoreManager {
             clash_config.insert("tun".into(), tun.into());
             clash_config.remove("redir-port");
             clash_config.remove("tproxy-port");
-        }
+            clash_config
+        };
 
         Config::runtime().await.edit_draft(|d| {
             *d = IRuntime {

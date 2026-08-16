@@ -338,6 +338,7 @@ impl IProfiles {
     /// (Previously only returned true when deleting the current profile.)
     ///
     /// Memory-only: collects files to unlink later. Does not touch disk or save yaml.
+    #[allow(clippy::unused_async)]
     pub async fn delete_item(&mut self, uid: &String) -> Result<(bool, Vec<String>)> {
         let current = self.current.as_ref().unwrap_or(uid);
         let current = current.clone();
@@ -1279,6 +1280,7 @@ fn activate_selected_nodes_with(repair: SelectionRepair) -> tokio::sync::oneshot
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::*;
     use tauri_plugin_mihomo::models::Proxy;

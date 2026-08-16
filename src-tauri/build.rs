@@ -1,6 +1,7 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Android + OpenHarmony share the "mobile-like" stubs (no tray/sysproxy/service).
     println!("cargo:rustc-check-cfg=cfg(clash_verge_mobile)");
+    println!("cargo:rustc-check-cfg=cfg(mobile)");
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     if target_os == "android" || target_env == "ohos" {

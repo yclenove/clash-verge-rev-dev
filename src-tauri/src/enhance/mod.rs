@@ -885,7 +885,7 @@ fn inject_merged_names_into_groups(config: &mut Mapping, new_names: &[Value], in
             .to_ascii_lowercase();
         let is_select = ty == "select" || ty == "selector";
         let is_urltest = ty == "urltest" || ty == "url-test" || ty == "url_test";
-        if !is_select && !(include_urltest && is_urltest) {
+        if !(is_select || include_urltest && is_urltest) {
             continue;
         }
         if map.get(Value::from("proxies")).is_none() {
@@ -1616,7 +1616,7 @@ mod authoritative_field_tests {
     }
 }
 
-#[allow(clippy::expect_used)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::{
@@ -2019,11 +2019,11 @@ proxy-groups:
     #[test]
     fn merged_names_skip_urltest_by_default() {
         let mut config = mapping(
-            r#"
+            r"
 proxy-groups:
   - { name: PROXY, type: select, proxies: [a] }
   - { name: AUTO, type: url-test, proxies: [a], url: http://www.gstatic.com/generate_204 }
-"#,
+",
         );
         inject_merged_names_into_groups(&mut config, &[serde_yaml_ng::Value::from("other")], false);
         let groups = config

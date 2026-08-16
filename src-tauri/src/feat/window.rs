@@ -111,7 +111,7 @@ fn snapshot_process_name(process: &str, process_path: &str) -> Option<String> {
     } else {
         process.trim()
     };
-    let basename = value.rsplit(|ch| ch == '/' || ch == '\\').next().unwrap_or(value);
+    let basename = value.rsplit(['/', '\\']).next().unwrap_or(value);
     non_empty_snapshot_value(basename)
 }
 
@@ -134,10 +134,10 @@ async fn persist_active_connections_best_effort(deadline: Duration) {
                 let proxy = if connection.chains.is_empty() {
                     None
                 } else {
-                    Some(connection.chains.join(" > ").into())
+                    Some(connection.chains.join(" > "))
                 };
                 log_store::ConnectionEntry {
-                    connection_id: connection.id.into(),
+                    connection_id: connection.id,
                     started_at,
                     observed_at: Some(observed_at),
                     closed_at: None,
