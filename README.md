@@ -1,124 +1,163 @@
 <h1 align="center">
-  <img src="./src-tauri/icons/icon.png" alt="Clash" width="128" />
+  <img src="./src-tauri/icons/icon.png" alt="Clash Verge Rev" width="128" />
   <br>
-  Continuation of <a href="https://github.com/zzzgydi/clash-verge">Clash Verge</a>
+  Clash Verge Rev Dev
   <br>
 </h1>
 
 <h3 align="center">
-A Clash Meta GUI based on <a href="https://github.com/tauri-apps/tauri">Tauri</a>.
+基于 <a href="https://github.com/clash-verge-rev/clash-verge-rev">Clash Verge Rev</a> 2.5.3 的个人 fork，给 Cursor / Grok 做「先 VPN，再家宽」出口。
 </h3>
 
 <p align="center">
-  Languages:
-  <a href="./README.md">简体中文</a> ·
-  <a href="./docs/README_en.md">English</a> ·
-  <a href="./docs/README_es.md">Español</a> ·
-  <a href="./docs/README_ru.md">Русский</a> ·
-  <a href="./docs/README_ja.md">日本語</a> ·
-  <a href="./docs/README_ko.md">한국어</a> ·
-  <a href="./docs/README_fa.md">فارسی</a>
+  <a href="https://github.com/yclenove/clash-verge-rev-dev/releases">下载安装包</a>
+  ·
+  <a href="https://github.com/yclenove/clash-verge-rev-dev">源码仓库</a>
+  ·
+  <a href="https://github.com/clash-verge-rev/clash-verge-rev">上游项目</a>
 </p>
 
-## 关于本仓库
+## 这个 fork 解决什么
 
-这是 Clash Verge Rev **2.5.3** 的 **Windows 专用开发树**（分支 `windows-dev`），从本地快照克隆，只修 Windows 客户端。
+Cursor 出口必须走规则，而不是开全局链式代理：
 
-- 本树路径：`D:\nexus-wsl\clash-verge-rev-windows`
-- 原树（macOS / OpenHarmony）：`D:\nexus-wsl\clash-verge-rev`
-- 上游项目：<https://github.com/clash-verge-rev/clash-verge-rev>
-- Windows 开发约定见：[WINDOWS.md](./WINDOWS.md)
-- 环境与命令见：[CONTRIBUTING.md](./CONTRIBUTING.md)
+```text
+Cursor / Grok
+  -> EXIT
+  -> Thordata-ISP          # 家宽 ISP，dialer-proxy = JMS
+  -> JMS                   # 订阅里的 VPN 组
+  -> 家宽出口
+```
 
-> 说明：本仓库是改过的本地树，不等同于上游正式发布版。不要把 OHOS / macOS 打包工作做到本目录。
+```mermaid
+flowchart LR
+  cursor["Cursor / Grok"] --> exitGroup["EXIT"]
+  exitGroup --> isp["Thordata-ISP"]
+  isp -->|"dialer-proxy"| jms["JMS / VPN"]
+  jms --> home["家宽"]
+```
+
+推荐状态：
+
+- 打开系统代理
+- 关掉虚拟网卡（TUN）
+- 全局链式代理保持空
+- `EXIT` 选 `Thordata-ISP`
+- `JMS` 里不要出现 `Thordata-ISP`
+
+一键设置默认会勾上 TUN。本机按进程名 / 路径匹配后，TUN 可以关掉。不要开全局链式。
+
+## 相对上游改了什么
+
+| 点 | 说明 |
+| --- | --- |
+| Cursor ISP 一键设置 | 设置里填静态 ISP 地址 / 端口 / 账号，写入前置跳节点、`EXIT` 组和 Cursor 规则 |
+| 拆 dialer 环 | 带 `dialer-proxy` 的节点不再注入 hop 组及其子组；`url-test` 组也不注入这类节点 |
+| 清空全局链 | 只恢复被全局链覆盖的 `dialer-proxy`，用户自己的 `Thordata-ISP -> JMS` 会留下来 |
+| macOS 规则 | 补 `Cursor` 进程名、`PROCESS-NAME-REGEX,(?i)^Cursor`、`PROCESS-PATH-REGEX,(?i)Cursor\\.app`，以及 Grok / `cursorvm.com` |
+
+旧逻辑会把 `Thordata-ISP` 塞进 `JMS`，而它自己的 `dialer-proxy` 又是 `JMS`，于是成环。开全局链会把 dialer 改成 VPN 叶子，所以看起来「一开全局链就好使」。现在规则模式就能通。
+
+## 下载
+
+安装包发在本仓库 [Releases](https://github.com/yclenove/clash-verge-rev-dev/releases)，不要去上游官方包找这次的 Cursor 链路修复。
+
+| 平台 | 文件 |
+| --- | --- |
+| Windows x64 | `Clash.Verge_*_x64-setup.exe`，另有 portable |
+| Windows ARM64 | `Clash.Verge_*_arm64-setup.exe`，另有 portable |
+| macOS Apple Silicon | `Clash.Verge_*_aarch64.dmg` |
+| macOS Intel | `Clash.Verge_*_x64.dmg` |
+| Linux amd64 / ARM | `.deb` / `.rpm` |
+
+macOS 本地未签名包如果被 Gatekeeper 拦住：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Clash Verge.app"
+```
+
+已安装的旧 App 不会自动吃到这次代码，需要装这个 Release。
+
+## Cursor ISP 怎么用
+
+1. 先导入带 `JMS` 组的订阅。
+2. 打开系统代理，关掉 TUN，全局链式代理留空。
+3. 打开 **设置 → Clash → Cursor ISP 一键设置**。
+4. 填静态 ISP 地址、端口、账号。默认值：
+   - 前置代理组：`JMS`
+   - 出口组名：`EXIT`
+   - ISP 节点名：`Thordata-ISP`
+5. **不要**勾「全局链式模式」。TUN 可按需关掉。
+6. 点「一键应用」，再把 `EXIT` 选到 `Thordata-ISP`。
+7. 用「测试 ISP 节点」看延迟。通的是带前置跳的 `Thordata-ISP`；`Thordata-ISP-Direct` 直连家宽，不通是预期。
+
+Mihomo 连接详情通常只显示 `['Thordata-ISP', 'EXIT']`，看不到 `JMS` 那一跳，这是内核展示限制，不代表 dialer 没走。
 
 ## Preview
 
-| Dark                             | Light                             |
-| -------------------------------- | --------------------------------- |
-| ![预览](./docs/preview_dark.png) | ![预览](./docs/preview_light.png) |
+| Dark | Light |
+| --- | --- |
+| ![深色预览](./docs/preview_dark.png) | ![浅色预览](./docs/preview_light.png) |
 
-## Install
-
-### 使用本仓库自行构建
+## 自行构建
 
 ```bash
-git clone https://github.com/zoozlmaki-byte/clash-verge-rev-dev.git
+git clone https://github.com/yclenove/clash-verge-rev-dev.git
 cd clash-verge-rev-dev
 pnpm i
 pnpm run prebuild
 pnpm build
 ```
 
-macOS（Apple Silicon）示例：
+macOS Apple Silicon：
 
 ```bash
 pnpm run prebuild aarch64-apple-darwin
 pnpm build --target aarch64-apple-darwin
 ```
 
-更多步骤见 [MAC_BUILD.md](./MAC_BUILD.md) 与 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+更多步骤见 [MAC_BUILD.md](./MAC_BUILD.md)、[WINDOWS.md](./WINDOWS.md)、[CONTRIBUTING.md](./CONTRIBUTING.md)。sidecar 不进 git，必须先跑 `prebuild`。
 
-### 上游官方安装包
+云打包走 GitHub Actions 工作流 **Desktop Package**，产物上传到 [Releases](https://github.com/yclenove/clash-verge-rev-dev/releases)。不要用官方 `Release Build` 工作流：它依赖上游签名密钥，这个 fork 没有。
 
-如需官方发行版安装包，请前往上游发布页：
+## 上游能力
 
-- [clash-verge-rev Releases](https://github.com/clash-verge-rev/clash-verge-rev/releases)
+这个 fork 仍是 Clash Meta GUI，基于 Tauri 2 / mihomo：
 
-支持 Windows（x64/x86）、Linux（x64/arm64）和 macOS 11+（Intel / Apple Silicon）。
-
-| 版本      | 说明                         | 链接                                                                                   |
-| :-------- | :--------------------------- | :------------------------------------------------------------------------------------- |
-| Stable    | 正式版，适合日常使用         | [Release](https://github.com/clash-verge-rev/clash-verge-rev/releases)                 |
-| AutoBuild | 滚动更新测试版，可能存在缺陷 | [AutoBuild](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/autobuild) |
-
-文档与常见问题：[Clash Verge Rev 文档](https://clash-verge-rev.github.io/)
-
-## Features
-
-- 基于 Rust 和 Tauri 2 框架
-- 内置 [Clash.Meta (mihomo)](https://github.com/MetaCubeX/mihomo) 内核，支持切换 `Alpha` 版本内核
-- 简洁美观的用户界面，支持自定义主题颜色、代理组/托盘图标以及 `CSS Injection`
-- 配置文件管理与增强（Merge / Script），支持语法提示
-- 系统代理与守卫、`TUN`（虚拟网卡）模式
+- 切换 `Alpha` 内核
+- 主题、代理组 / 托盘图标、`CSS Injection`
+- 配置 Merge / Script，语法提示
+- 系统代理守卫、TUN
 - 可视化节点与规则编辑
-- WebDAV 配置备份与同步
+- WebDAV 备份
 
-## FAQ
+通用问题仍可看 [上游文档](https://clash-verge-rev.github.io/)。
 
-参见 [文档 FAQ](https://clash-verge-rev.github.io/faq/windows.html)
+## 开发
 
-## Development
-
-详见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
-
-安装 Tauri 相关依赖后：
-
-```shell
+```bash
 pnpm i
 pnpm run prebuild
 pnpm dev
 ```
 
-- `pnpm dev`：沿用开发通道服务状态；若服务未安装，则走 Sidecar 模式
-- `pnpm dev:service`：安装/更新隔离开发服务后启动
-- `pnpm dev:sidecar`：强制使用无特权 Sidecar 流程
+- `pnpm dev`：沿用开发通道服务；没装服务则走 Sidecar
+- `pnpm dev:service`：安装 / 更新隔离开发服务后启动
+- `pnpm dev:sidecar`：强制无特权 Sidecar
 
-## Contributions
+Issue 和 PR 欢迎。
 
-Issue 与 PR 欢迎。
+## 致谢
 
-## Acknowledgement
+基于或参考：
 
-Clash Verge Rev 基于或参考了以下项目：
-
-- [zzzgydi/clash-verge](https://github.com/zzzgydi/clash-verge)：基于 Tauri 的 Clash GUI，支持 Windows / macOS / Linux
-- [tauri-apps/tauri](https://github.com/tauri-apps/tauri)：用 Web 前端构建更小、更快、更安全的桌面应用
-- [Dreamacro/clash](https://github.com/Dreamacro/clash)：基于规则的 Go 隧道
-- [MetaCubeX/mihomo](https://github.com/MetaCubeX/mihomo)：基于规则的 Go 隧道
-- [Fndroid/clash_for_windows_pkg](https://github.com/Fndroid/clash_for_windows_pkg)：基于 Clash 的 Windows/macOS GUI
-- [vitejs/vite](https://github.com/vitejs/vite)：下一代前端工具链
+- [clash-verge-rev/clash-verge-rev](https://github.com/clash-verge-rev/clash-verge-rev)
+- [zzzgydi/clash-verge](https://github.com/zzzgydi/clash-verge)
+- [tauri-apps/tauri](https://github.com/tauri-apps/tauri)
+- [MetaCubeX/mihomo](https://github.com/MetaCubeX/mihomo)
+- [Dreamacro/clash](https://github.com/Dreamacro/clash)
+- [vitejs/vite](https://github.com/vitejs/vite)
 
 ## License
 
-GPL-3.0 License. See [License](./LICENSE) for details.
+GPL-3.0。详见 [LICENSE](./LICENSE)。

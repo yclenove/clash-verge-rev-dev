@@ -1,17 +1,8 @@
-# Clash Verge Rev — Windows 开发树
+# Clash Verge Rev — Windows 构建说明
 
-本目录是 **Windows 专用开发副本**，从 `D:\nexus-wsl\clash-verge-rev` 于 2026-08-15 克隆。
+仓库：[yclenove/clash-verge-rev-dev](https://github.com/yclenove/clash-verge-rev-dev)。这是 Clash Verge Rev 2.5.3 的个人 fork，Windows / macOS / Linux 都打。
 
-- 路径：`D:\nexus-wsl\clash-verge-rev-windows`
-- 分支：`windows-dev`（基于 `346b900`）
-- 版本：2.5.3
-- 原树（macOS / OpenHarmony 打包）仍留在 `D:\nexus-wsl\clash-verge-rev`，两边独立改，不要混提交。
-
-## 本树要做什么
-
-只修 Windows 客户端问题：系统代理、TUN / Service、自启动、WebView2、UWP 回环、NSIS 安装包、托盘与窗口。
-
-不要在本树做 OHOS HAP / macOS 打包。鸿蒙相关源码仍在仓库里（`cfg` 隔离），但不是本树的工作目标。
+Windows 这边主要盯：系统代理、TUN / Service、自启动、WebView2、UWP 回环、NSIS 安装包、托盘与窗口。
 
 ## 构建
 

@@ -2,7 +2,10 @@
 
 ### 🐞 修复问题
 
-修复 macOS 多显示器切换时托盘速率样式不同步
+- 修复带 `dialer-proxy` 的 ISP 节点被注入 hop 组导致成环，必须开全局链式代理才能通的问题
+- 清空全局链时不再误删用户 / profile 自己的 `dialer-proxy`
+- Cursor ISP 规则补齐 macOS 进程名、路径正则，以及 Grok / `cursorvm.com`
+- 修复 macOS 多显示器切换时托盘速率样式不同步
 - 修复首页标题栏缺少 TUN 开关，以及多订阅合并默认关闭导致首页只能看到基准订阅节点
 
 <details>

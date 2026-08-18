@@ -5,7 +5,7 @@ Source: Clash Verge Rev 2.5.3 (local snapshot)
 ## Clone
 
 ```bash
-git clone https://github.com/zoozlmaki-byte/clash-verge-rev-dev.git
+git clone https://github.com/yclenove/clash-verge-rev-dev.git
 cd clash-verge-rev-dev
 ```
 
