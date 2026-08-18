@@ -60,7 +60,7 @@ flowchart LR
 
 ## 下载
 
-安装包发在本仓库 [Releases](https://github.com/yclenove/clash-verge-rev-dev/releases)。当前对应云打包：[Desktop Package #32093256178](https://github.com/yclenove/clash-verge-rev-dev/actions/runs/32093256178)（commit `b9537d9`）。
+安装包发在本仓库 [Releases](https://github.com/yclenove/clash-verge-rev-dev/releases/tag/v2.5.3-dev.1)。当前版本 **v2.5.3-dev.1**，对应云打包：[Desktop Package #32093256178](https://github.com/yclenove/clash-verge-rev-dev/actions/runs/32093256178)（构建 commit `b9537d9`）。
 
 | 平台 | 文件 |
 | --- | --- |
