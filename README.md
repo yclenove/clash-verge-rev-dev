@@ -64,11 +64,12 @@ flowchart LR
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows x64 | `Clash.Verge_*_x64-setup.exe`，另有 portable |
-| Windows ARM64 | `Clash.Verge_*_arm64-setup.exe`，另有 portable |
-| macOS Apple Silicon | `Clash.Verge_*_aarch64.dmg` |
-| macOS Intel | `Clash.Verge_*_x64.dmg` |
-| Linux amd64 / ARM | `.deb` / `.rpm` |
+| Windows x64 | [`Clash.Verge_2.5.3_x64-setup.exe`](https://github.com/yclenove/clash-verge-rev-dev/releases/download/v2.5.3-dev.1/Clash.Verge_2.5.3_x64-setup.exe)，另有 [portable](https://github.com/yclenove/clash-verge-rev-dev/releases/download/v2.5.3-dev.1/Clash.Verge_2.5.3_x64_portable.zip) |
+| Windows ARM64 | [`Clash.Verge_2.5.3_arm64-setup.exe`](https://github.com/yclenove/clash-verge-rev-dev/releases/download/v2.5.3-dev.1/Clash.Verge_2.5.3_arm64-setup.exe)，另有 [portable](https://github.com/yclenove/clash-verge-rev-dev/releases/download/v2.5.3-dev.1/Clash.Verge_2.5.3_arm64_portable.zip) |
+| macOS Apple Silicon | [`Clash.Verge_2.5.3_aarch64.dmg`](https://github.com/yclenove/clash-verge-rev-dev/releases/download/v2.5.3-dev.1/Clash.Verge_2.5.3_aarch64.dmg) |
+| macOS Intel | [`Clash.Verge_2.5.3_x64.dmg`](https://github.com/yclenove/clash-verge-rev-dev/releases/download/v2.5.3-dev.1/Clash.Verge_2.5.3_x64.dmg) |
+| Linux amd64 | [`Clash.Verge_2.5.3_amd64.deb`](https://github.com/yclenove/clash-verge-rev-dev/releases/download/v2.5.3-dev.1/Clash.Verge_2.5.3_amd64.deb) / [`Clash.Verge-2.5.3-1.x86_64.rpm`](https://github.com/yclenove/clash-verge-rev-dev/releases/download/v2.5.3-dev.1/Clash.Verge-2.5.3-1.x86_64.rpm) |
+| Linux ARM64 / ARMv7 | `.deb` / `.rpm` 见 [Release](https://github.com/yclenove/clash-verge-rev-dev/releases/tag/v2.5.3-dev.1) |
 
 已安装的旧 App 不会自动吃到这次代码，需要装这个 Release。
 
