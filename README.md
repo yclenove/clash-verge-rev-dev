@@ -28,15 +28,22 @@
 
 ## 跟官方版对比
 
-官方 Clash Verge Rev 2.5.3 能当日常代理客户端用，但 Cursor 要走「先 VPN，再家宽」时会卡住：
+对照来源是官方仓库 [clash-verge-rev/clash-verge-rev](https://github.com/clash-verge-rev/clash-verge-rev)，不是把「上游」三个字换成「官方」：
 
-| | 官方版 | 这个修改版 |
+- 正式 Release 最新是 [v2.5.2](https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/v2.5.2)（2026-07-19）
+- 官方 `dev` 的版本号已经是 2.5.3，但还没有正式 `v2.5.3` Release
+- 官方 `v2.5.2` 和 `dev` 里的 `src-tauri/src/config/runtime.rs`、`src-tauri/src/enhance/seq.rs` **内容相同**
+- 这个修改版基于官方 2.5.3 代码，只改 Cursor 这条链路
+
+官方包能当日常代理客户端用。Cursor 要走「先 VPN，再家宽」，官方会卡在两处：
+
+| | 官方版（v2.5.2 / 官方 2.5.3 `dev`） | 这个修改版 |
 | --- | --- | --- |
-| Cursor 出口 | 没有一键设置。要自己写节点、组和规则 | 设置里有 **Cursor ISP 一键设置** |
-| 规则模式 | `Thordata-ISP` 会被塞进 `JMS`，和自己的 `dialer-proxy = JMS` 成环，规则模式不通 | 带 `dialer-proxy` 的节点不再进 hop 组，规则模式能通 |
-| 全局链式代理 | 一开全局链，dialer 被改成 VPN 叶子，看起来就通了 | **不用开**。清空全局链时，用户自己的 `Thordata-ISP -> JMS` 会留下 |
-| macOS 匹配 | 容易漏掉 Cursor / Grok 进程和路径 | 补了进程名、路径正则，以及 Grok / `cursorvm.com` |
-| 虚拟网卡（TUN） | 日常可开可关 | 本机按进程匹配后可以关 |
+| Cursor 出口 | 没有 `cursor-isp-setup` 文件，设置里也没有这项 | 设置里有 **Cursor ISP 一键设置** |
+| 清空全局链 | [`update_proxy_chain_config`](https://github.com/clash-verge-rev/clash-verge-rev/blob/dev/src-tauri/src/config/runtime.rs) 会先删掉**所有**节点的 `dialer-proxy`。链是空的就不会写回去，用户自己的 `Thordata-ISP -> JMS` 没了 | 空链保留用户 dialer；清掉全局链时也会把用户原来的 dialer 还原 |
+| 新节点进组 | 只塞进**第一个** `select` 组；`url-test`（常见 `JMS`）不会被塞 | 会进所有 `select` / `url-test` 组，但带 `dialer-proxy` 的节点不进 hop 组，避免 `Thordata-ISP` 进 `JMS` 成环 |
+| Cursor / Grok 规则 | 没有现成的进程名、路径、`cursorvm.com` 规则，要自己写 | 一键写入 `PROCESS-NAME` / `PROCESS-PATH-REGEX` / `DOMAIN-SUFFIX`，含 Grok、`cursorvm.com` |
+| 虚拟网卡（TUN） | 功能一样，日常可开可关 | 代码没改 TUN。本机按进程匹配后可以关 |
 
 目标链路：
 
@@ -56,7 +63,7 @@ flowchart LR
   jms --> home["家宽"]
 ```
 
-官方版会把 `Thordata-ISP` 塞进 `JMS`，而它自己的 `dialer-proxy` 又是 `JMS`，于是成环。开全局链会把 dialer 改成 VPN 叶子，所以官方包上「一开全局链就好使」。这个修改版在规则模式下就能通。
+官方包「一开全局链就好使」，是因为全局链会按链重新写 `dialer-proxy`，把刚才删掉的前置跳补回去。链保持空时，官方不会保留用户自己写的 `Thordata-ISP -> JMS`。这个修改版不用开全局链，规则模式就能走上面这条路。
 
 界面、订阅、系统代理、TUN、主题这些，官方版有的这里都还在。通用用法看 [官方文档](https://clash-verge-rev.github.io/)。
 
@@ -111,7 +118,7 @@ Mihomo 连接详情通常只显示 `['Thordata-ISP', 'EXIT']`，看不到 `JMS` 
 ## 常见问题
 
 **必须开全局链式代理吗？**  
-不用。官方版要靠全局链绕开成环；这个修改版把环拆了，全局链保持空，走 `EXIT -> Thordata-ISP -> JMS` 即可。
+不用。官方清空全局链时会删掉用户自己的 `dialer-proxy`，所以要靠全局链把前置跳写回去。这个修改版空链会留下 `Thordata-ISP -> JMS`，走 `EXIT -> Thordata-ISP -> JMS` 即可。
 
 **虚拟网卡（TUN）要开吗？**  
 可以关。本机按进程名 / 路径匹配 Cursor / Grok。一键设置默认会勾上 TUN，应用后自行关掉即可。
