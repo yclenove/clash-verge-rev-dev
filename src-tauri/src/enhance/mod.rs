@@ -901,129 +901,6 @@ fn inject_merged_names_into_groups(config: &mut Mapping, new_names: &[Value], in
     }
 }
 
-/// 从 verge 持久化配置中读取链式代理定义，并注入到当前配置。
-/// 这使得配置全量重建（更新订阅、切换订阅等）后链式代理能自动恢复。
-async fn apply_persisted_proxy_chain(mut config: Mapping) -> Mapping {
-    let verge = Config::verge().await;
-    let verge_arc = verge.latest_arc();
-    let chain_nodes = verge_arc.proxy_chain_nodes.clone();
-    let chain_group = verge_arc.proxy_chain_group.clone();
-    drop(verge_arc);
-    drop(verge);
-
-    // 解析节点列表：必须是非空数组
-    let nodes: Vec<serde_yaml_ng::Value> = match chain_nodes {
-        Some(serde_json::Value::Array(arr)) if !arr.is_empty() => {
-            arr.into_iter()
-                .filter_map(|v| {
-                    // serde_json::Value -> serde_yaml_ng::Value
-                    let s = serde_json::to_string(&v).ok()?;
-                    serde_yaml_ng::from_str(&s).ok()
-                })
-                .collect()
-        }
-        _ => return config,
-    };
-
-    if nodes.is_empty() {
-        return config;
-    }
-
-    logging!(
-        info,
-        Type::Core,
-        "restoring persisted proxy chain ({} nodes)",
-        nodes.len()
-    );
-
-    // 收集有序节点名称，并注入外部代理定义
-    let mut ordered_names: Vec<serde_yaml_ng::Value> = Vec::with_capacity(nodes.len());
-    for element in &nodes {
-        match element {
-            serde_yaml_ng::Value::Mapping(proxy) => {
-                let Some(name) = proxy.get("name").and_then(|n| n.as_str()) else {
-                    continue;
-                };
-                let already_exists = config
-                    .get("proxies")
-                    .and_then(|p| p.as_sequence())
-                    .is_some_and(|proxies| {
-                        proxies
-                            .iter()
-                            .any(|p| p.get("name").and_then(|n| n.as_str()) == Some(name))
-                    });
-                if !already_exists && let Some(serde_yaml_ng::Value::Sequence(proxies)) = config.get_mut("proxies") {
-                    proxies.push(element.clone());
-                }
-                ordered_names.push(serde_yaml_ng::Value::String(name.into()));
-            }
-            serde_yaml_ng::Value::String(name) => {
-                ordered_names.push(serde_yaml_ng::Value::String(name.clone()));
-            }
-            _ => {}
-        }
-    }
-
-    if ordered_names.is_empty() {
-        return config;
-    }
-
-    // 连接 dialer-proxy 链
-    if let Some(serde_yaml_ng::Value::Sequence(proxies)) = config.get_mut("proxies") {
-        for (i, dialer_proxy) in ordered_names.iter().enumerate() {
-            if i == 0 {
-                continue;
-            }
-            if let Some(prev) = ordered_names.get(i - 1)
-                && let Some(serde_yaml_ng::Value::Mapping(proxy)) =
-                    proxies.iter_mut().find(|p| p.get("name") == Some(dialer_proxy))
-            {
-                proxy.insert("dialer-proxy".into(), prev.to_owned());
-            }
-        }
-    }
-
-    // 将链节点加入目标代理组
-    if let Some(serde_yaml_ng::Value::Sequence(groups)) = config.get_mut("proxy-groups") {
-        for group in groups.iter_mut() {
-            let Some(group_map) = group.as_mapping_mut() else {
-                continue;
-            };
-            let Some(group_name) = group_map.get("name").and_then(|n| n.as_str()).map(String::from) else {
-                continue;
-            };
-
-            let is_target = match &chain_group {
-                Some(target) => group_name == target.as_str(),
-                None => {
-                    let t = group_map
-                        .get("type")
-                        .and_then(|v| v.as_str())
-                        .map(|t| t.to_ascii_lowercase())
-                        .unwrap_or_default();
-                    t == "select" || t == "selector" || t == "urltest" || t == "url-test" || t == "url_test"
-                }
-            };
-            if !is_target {
-                continue;
-            }
-
-            if group_map.get("proxies").is_none() {
-                group_map.insert("proxies".into(), serde_yaml_ng::Value::Sequence(Default::default()));
-            }
-            if let Some(serde_yaml_ng::Value::Sequence(members)) = group_map.get_mut("proxies") {
-                for name in &ordered_names {
-                    if !members.contains(name) {
-                        members.push(name.clone());
-                    }
-                }
-            }
-        }
-    }
-
-    config
-}
-
 /// Enhance mode
 /// 返回最终订阅、该订阅包含的键、和script执行的结果
 pub async fn enhance() -> Result<(Mapping, HashSet<String>, HashMap<String, ResultLog>)> {
@@ -1122,9 +999,6 @@ pub async fn enhance() -> Result<(Mapping, HashSet<String>, HashMap<String, Resu
 
     let config = cleanup_proxy_groups(config);
     let config = use_sort(config);
-
-    // L1: 从 verge 持久化配置恢复链式代理注入（配置重建后自动恢复）
-    let config = apply_persisted_proxy_chain(config).await;
 
     #[cfg(target_env = "ohos")]
     let config = {

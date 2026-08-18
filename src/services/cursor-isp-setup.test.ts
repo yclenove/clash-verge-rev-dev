@@ -74,7 +74,7 @@ describe('cursor isp setup service', () => {
       'dialer-proxy': 'JMS',
     })
     const rules = parseSeqConfig(files.get('Rules'))
-    expect(rules.prepend[0]).toBe('PROCESS-NAME,Cursor.exe,EXIT')
+    expect(rules.prepend[0]).toBe('PROCESS-NAME,Cursor,EXIT')
     expect(rules.prepend).toContain('DOMAIN,api.example.test,JMS')
     expect(used.patchVergeConfig).toHaveBeenCalledWith({
       proxy_chain_nodes: [],

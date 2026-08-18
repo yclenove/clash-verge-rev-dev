@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Sequence, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SeqMap {
@@ -30,6 +30,85 @@ fn is_selector_group(group_map: &Mapping) -> bool {
         .unwrap_or(false)
 }
 
+fn is_urltest_group(group_map: &Mapping) -> bool {
+    group_map
+        .get("type")
+        .and_then(Value::as_str)
+        .map(|value| {
+            let value = value.to_ascii_lowercase();
+            value == "urltest" || value == "url-test" || value == "url_test"
+        })
+        .unwrap_or(false)
+}
+
+fn collect_proxy_dialers(seq: &Sequence) -> HashMap<String, String> {
+    let mut dialers = HashMap::new();
+    for item in seq {
+        let Value::Mapping(map) = item else {
+            continue;
+        };
+        let Some(name) = map.get("name").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(dialer) = map.get("dialer-proxy").and_then(Value::as_str) else {
+            continue;
+        };
+        if !dialer.is_empty() {
+            dialers.insert(name.to_owned(), dialer.to_owned());
+        }
+    }
+    dialers
+}
+
+fn group_name_and_members(group: &Value) -> Option<(String, Vec<String>)> {
+    let map = group.as_mapping()?;
+    let name = map.get("name").and_then(Value::as_str)?.to_owned();
+    let members = map
+        .get("proxies")
+        .and_then(Value::as_sequence)
+        .map(|seq| {
+            seq.iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    Some((name, members))
+}
+
+fn forbidden_groups_for_dialers(proxy_groups: &Sequence, added_dialers: &HashMap<String, String>) -> HashSet<String> {
+    if added_dialers.is_empty() {
+        return HashSet::new();
+    }
+
+    let mut members_by_group: HashMap<String, Vec<String>> = HashMap::new();
+    let mut group_names = HashSet::new();
+    for group in proxy_groups {
+        if let Some((name, members)) = group_name_and_members(group) {
+            group_names.insert(name.clone());
+            members_by_group.insert(name, members);
+        }
+    }
+
+    let mut forbidden: HashSet<String> = added_dialers
+        .values()
+        .filter(|name| group_names.contains(*name))
+        .cloned()
+        .collect();
+    let mut stack: Vec<String> = forbidden.iter().cloned().collect();
+    while let Some(name) = stack.pop() {
+        let Some(members) = members_by_group.get(&name) else {
+            continue;
+        };
+        for member in members {
+            if group_names.contains(member) && forbidden.insert(member.clone()) {
+                stack.push(member.clone());
+            }
+        }
+    }
+    forbidden
+}
+
 pub fn use_seq(seq: SeqMap, mut config: Mapping, field: &str) -> Mapping {
     let SeqMap {
         prepend,
@@ -37,16 +116,19 @@ pub fn use_seq(seq: SeqMap, mut config: Mapping, field: &str) -> Mapping {
         delete,
     } = seq;
 
-    let added_proxy_names = if field == "proxies" {
+    let (added_proxy_names, added_proxy_dialers) = if field == "proxies" {
         let mut names = collect_proxy_names(&prepend);
         names.extend(collect_proxy_names(&append));
         let mut seen = HashSet::new();
-        names
+        let names = names
             .into_iter()
             .filter(|name| seen.insert(name.clone()))
-            .collect::<Vec<String>>()
+            .collect::<Vec<String>>();
+        let mut dialers = collect_proxy_dialers(&prepend);
+        dialers.extend(collect_proxy_dialers(&append));
+        (names, dialers)
     } else {
-        Vec::new()
+        (Vec::new(), HashMap::new())
     };
 
     let mut updated_items = Sequence::new();
@@ -89,6 +171,8 @@ pub fn use_seq(seq: SeqMap, mut config: Mapping, field: &str) -> Mapping {
         return config;
     };
 
+    let forbidden_groups = forbidden_groups_for_dialers(&proxy_groups, &added_proxy_dialers);
+
     let mut updated_groups = Sequence::new();
     for group in proxy_groups {
         if let Value::Mapping(mut group_map) = group {
@@ -113,10 +197,22 @@ pub fn use_seq(seq: SeqMap, mut config: Mapping, field: &str) -> Mapping {
             };
 
             if !added_proxy_names.is_empty() && is_selector_group(&group_map) {
+                let group_name = group_map.get("name").and_then(Value::as_str).unwrap_or_default();
+                let skip_all_added = forbidden_groups.contains(group_name);
+                let skip_dialer_nodes = is_urltest_group(&group_map);
+                let names_to_inject = added_proxy_names.iter().filter(|name| {
+                    if skip_all_added {
+                        return false;
+                    }
+                    match added_proxy_dialers.get(*name) {
+                        Some(dialer) if skip_dialer_nodes || dialer == group_name => false,
+                        _ => true,
+                    }
+                });
                 let base_group_proxies = group_proxies.unwrap_or_else(Sequence::new);
                 let mut merged_proxies = Sequence::new();
                 let mut seen_proxy_names = HashSet::new();
-                for name in &added_proxy_names {
+                for name in names_to_inject {
                     if seen_proxy_names.insert(name.clone()) {
                         merged_proxies.push(Value::String(name.clone()));
                     }
@@ -298,6 +394,78 @@ proxy-groups:
             .expect("group proxies should be a sequence");
         let names: Vec<&str> = group2_proxies.iter().filter_map(Value::as_str).collect();
         assert_eq!(names, vec!["proxy3", "proxy4", "proxy1"]);
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    #[allow(clippy::expect_used)]
+    fn test_skip_dialer_proxy_nodes_from_hop_groups() {
+        let config_str = r#"
+proxies:
+- name: "JMS-leaf"
+  type: "ss"
+proxy-groups:
+- name: "JMS"
+  type: "select"
+  proxies:
+    - "JMS Auto"
+    - "JMS-leaf"
+- name: "JMS Auto"
+  type: "url-test"
+  proxies:
+    - "JMS-leaf"
+- name: "OTHER"
+  type: "select"
+  proxies:
+    - "JMS-leaf"
+"#;
+        let mut config: Mapping = serde_yaml_ng::from_str(config_str).expect("Failed to parse test config YAML");
+
+        let append: Sequence = serde_yaml_ng::from_str(
+            r#"
+- name: "Thordata-ISP"
+  type: "http"
+  server: "isp.example"
+  port: 6666
+  dialer-proxy: "JMS"
+- name: "Thordata-ISP-Direct"
+  type: "http"
+  server: "isp.example"
+  port: 6666
+"#,
+        )
+        .expect("Failed to parse append proxies");
+
+        let seq = SeqMap {
+            prepend: Sequence::new(),
+            append,
+            delete: vec![],
+        };
+
+        config = use_seq(seq, config, "proxies");
+
+        let groups = config
+            .get("proxy-groups")
+            .expect("proxy-groups field should exist")
+            .as_sequence()
+            .expect("proxy-groups should be a sequence");
+
+        let names_of = |index: usize| -> Vec<&str> {
+            groups[index]
+                .as_mapping()
+                .expect("group should be a mapping")
+                .get("proxies")
+                .expect("group should have proxies")
+                .as_sequence()
+                .expect("group proxies should be a sequence")
+                .iter()
+                .filter_map(Value::as_str)
+                .collect()
+        };
+
+        assert_eq!(names_of(0), vec!["JMS Auto", "JMS-leaf"]);
+        assert_eq!(names_of(1), vec!["JMS-leaf"]);
+        assert_eq!(names_of(2), vec!["Thordata-ISP", "Thordata-ISP-Direct", "JMS-leaf"]);
     }
 
     #[test]

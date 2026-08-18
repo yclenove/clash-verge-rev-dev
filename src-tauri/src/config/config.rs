@@ -241,6 +241,11 @@ impl Config {
 
         sanitize_tunnels_proxy(&mut config);
 
+        let (chain_nodes, chain_group) = {
+            let verge = Self::verge().await.latest_arc();
+            (verge.proxy_chain_nodes.clone(), verge.proxy_chain_group.clone())
+        };
+
         Self::runtime().await.edit_draft(|d| {
             *d = IRuntime {
                 config: Some(config),
@@ -248,6 +253,16 @@ impl Config {
                 chain_logs: logs,
                 chain_injected_proxies: Vec::new(),
                 chain_injected_group_members: Vec::new(),
+                chain_overwritten_dialer_proxies: Vec::new(),
+            };
+            if let Some(chain) = IRuntime::persisted_chain_from_json(chain_nodes.as_ref()) {
+                logging!(
+                    info,
+                    Type::Config,
+                    "restoring persisted proxy chain ({} nodes)",
+                    chain.as_sequence().map(Vec::len).unwrap_or(0)
+                );
+                d.update_proxy_chain_config(Some(chain), chain_group);
             }
         });
 

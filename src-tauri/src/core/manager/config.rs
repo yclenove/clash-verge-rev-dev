@@ -183,6 +183,7 @@ impl CoreManager {
                 chain_logs: Default::default(),
                 chain_injected_proxies: Vec::new(),
                 chain_injected_group_members: Vec::new(),
+                chain_overwritten_dialer_proxies: Vec::new(),
             }
         });
 

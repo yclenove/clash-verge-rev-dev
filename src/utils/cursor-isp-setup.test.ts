@@ -104,12 +104,12 @@ describe('cursor isp setup helpers', () => {
       "prepend:\n  - 'DOMAIN,api.example.test,JMS'\nappend: []\ndelete: []\n",
     )
     const merged = mergeRuleEnhance(existing, 'EXIT')
-    expect(merged.prepend[0]).toBe('PROCESS-NAME,Cursor.exe,EXIT')
+    expect(merged.prepend[0]).toBe('PROCESS-NAME,Cursor,EXIT')
     expect(merged.prepend).toContain('DOMAIN-SUFFIX,cursor.sh,EXIT')
     expect(merged.prepend.at(-1)).toBe('DOMAIN,api.example.test,JMS')
     const again = mergeRuleEnhance(merged, 'EXIT')
     expect(
-      again.prepend.filter((item) => item === 'PROCESS-NAME,Cursor.exe,EXIT'),
+      again.prepend.filter((item) => item === 'PROCESS-NAME,Cursor,EXIT'),
     ).toHaveLength(1)
   })
 
@@ -188,7 +188,13 @@ describe('cursor isp setup helpers', () => {
 
   test('cursor rule set covers process and ai domains', () => {
     const rules = buildCursorIspRules('EXIT')
+    expect(rules[0]).toBe('PROCESS-NAME,Cursor,EXIT')
+    expect(rules).toContain('PROCESS-NAME,Cursor Helper,EXIT')
     expect(rules).toContain('PROCESS-NAME,Cursor Helper.exe,EXIT')
+    expect(rules).toContain('PROCESS-NAME-REGEX,(?i)^Cursor,EXIT')
+    expect(rules).toContain('PROCESS-PATH-REGEX,(?i)Cursor\\.app,EXIT')
+    expect(rules).toContain('PROCESS-NAME,Grok Bot,EXIT')
+    expect(rules).toContain('DOMAIN-SUFFIX,cursorvm.com,EXIT')
     expect(rules).toContain('DOMAIN-SUFFIX,openai.com,EXIT')
     expect(rules).toContain('DOMAIN,api2.cursor.sh,EXIT')
   })

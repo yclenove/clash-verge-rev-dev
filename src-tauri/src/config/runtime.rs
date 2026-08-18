@@ -19,6 +19,10 @@ pub struct IRuntime {
     pub chain_injected_proxies: Vec<String>,
     // (group name, node name) pairs added to proxy-groups by a chain operation.
     pub chain_injected_group_members: Vec<(String, String)>,
+    // User-defined dialer-proxy values overwritten by the last global chain.
+    // Cleared/disconnected chains restore only these entries so profile-level
+    // hops (e.g. Cursor ISP: Thordata-ISP -> JMS) are left intact.
+    pub chain_overwritten_dialer_proxies: Vec<(String, Option<Value>)>,
 }
 
 impl IRuntime {
@@ -118,16 +122,10 @@ impl IRuntime {
             return;
         };
 
-        // 1. Strip any dialer-proxy markers left over from a previous chain.
-        if let Some(Value::Sequence(proxies)) = config.get_mut("proxies") {
-            proxies.iter_mut().for_each(|proxy| {
-                if let Some(proxy) = proxy.as_mapping_mut()
-                    && proxy.get("dialer-proxy").is_some()
-                {
-                    proxy.remove("dialer-proxy");
-                }
-            });
-        }
+        // 1. Restore dialer-proxy values overwritten by a previous global chain.
+        //    Do not strip user/profile dialer-proxy entries.
+        let previous_overwrites = std::mem::take(&mut self.chain_overwritten_dialer_proxies);
+        restore_overwritten_dialer_proxies(config, previous_overwrites);
 
         // 2. Remove proxies that were injected by a previous chain operation.
         if !self.chain_injected_proxies.is_empty() {
@@ -234,6 +232,10 @@ impl IRuntime {
                     && i != 0
                     && let Some(prev) = ordered_names.get(i - 1)
                 {
+                    let original = proxy.get("dialer-proxy").cloned();
+                    if let Some(name) = dialer_proxy.as_str() {
+                        self.chain_overwritten_dialer_proxies.push((name.into(), original));
+                    }
                     proxy.insert("dialer-proxy".into(), prev.to_owned());
                 }
             }
@@ -293,5 +295,185 @@ impl IRuntime {
                 }
             }
         }
+    }
+
+    /// Convert persisted `verge.proxy_chain_nodes` JSON into a runtime chain value.
+    /// Returns None when the chain is missing or empty so callers can no-op.
+    pub fn persisted_chain_from_json(nodes: Option<&serde_json::Value>) -> Option<Value> {
+        let Some(serde_json::Value::Array(items)) = nodes else {
+            return None;
+        };
+        if items.is_empty() {
+            return None;
+        }
+        let seq: serde_yaml_ng::Sequence = items
+            .iter()
+            .filter_map(|item| {
+                let raw = serde_json::to_string(item).ok()?;
+                serde_yaml_ng::from_str(&raw).ok()
+            })
+            .collect();
+        if seq.is_empty() {
+            None
+        } else {
+            Some(Value::Sequence(seq))
+        }
+    }
+}
+
+fn restore_overwritten_dialer_proxies(config: &mut Mapping, overwrites: Vec<(String, Option<Value>)>) {
+    let Some(Value::Sequence(proxies)) = config.get_mut("proxies") else {
+        return;
+    };
+    for (name, original) in overwrites {
+        let Some(Value::Mapping(proxy)) = proxies
+            .iter_mut()
+            .find(|proxy| proxy.get("name").and_then(Value::as_str) == Some(name.as_str()))
+        else {
+            continue;
+        };
+        match original {
+            Some(value) => {
+                proxy.insert("dialer-proxy".into(), value);
+            }
+            None => {
+                proxy.remove("dialer-proxy");
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn runtime_from_yaml(yaml: &str) -> IRuntime {
+        IRuntime {
+            config: Some(serde_yaml_ng::from_str(yaml).expect("yaml")),
+            ..IRuntime::default()
+        }
+    }
+
+    fn proxy_dialer(runtime: &IRuntime, name: &str) -> Option<std::string::String> {
+        runtime
+            .config
+            .as_ref()
+            .and_then(|config| config.get("proxies"))
+            .and_then(Value::as_sequence)
+            .and_then(|proxies| {
+                proxies
+                    .iter()
+                    .find(|proxy| proxy.get("name").and_then(Value::as_str) == Some(name))
+            })
+            .and_then(|proxy| proxy.get("dialer-proxy"))
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+    }
+
+    fn chain_names(names: &[&str]) -> Value {
+        Value::Sequence(names.iter().map(|name| Value::from(*name)).collect())
+    }
+
+    #[test]
+    fn empty_chain_keeps_user_dialer_proxy() {
+        let mut runtime = runtime_from_yaml(
+            r#"
+proxies:
+  - name: JMS
+    type: ss
+    server: vpn.example
+    port: 443
+  - name: Thordata-ISP
+    type: http
+    server: isp.example
+    port: 6666
+    dialer-proxy: JMS
+  - name: Thordata-ISP-Direct
+    type: http
+    server: isp.example
+    port: 6666
+"#,
+        );
+
+        runtime.update_proxy_chain_config(None, None);
+        assert_eq!(proxy_dialer(&runtime, "Thordata-ISP").as_deref(), Some("JMS"));
+        assert_eq!(proxy_dialer(&runtime, "Thordata-ISP-Direct"), None);
+
+        runtime.update_proxy_chain_config(Some(Value::Sequence(vec![])), None);
+        assert_eq!(proxy_dialer(&runtime, "Thordata-ISP").as_deref(), Some("JMS"));
+    }
+
+    #[test]
+    fn clearing_global_chain_restores_user_dialer_proxy() {
+        let mut runtime = runtime_from_yaml(
+            r#"
+proxies:
+  - name: JMS-leaf
+    type: ss
+    server: vpn.example
+    port: 443
+  - name: Thordata-ISP
+    type: http
+    server: isp.example
+    port: 6666
+    dialer-proxy: JMS
+  - name: Exit-Only
+    type: http
+    server: other.example
+    port: 8080
+"#,
+        );
+
+        runtime.update_proxy_chain_config(Some(chain_names(&["JMS-leaf", "Thordata-ISP"])), None);
+        assert_eq!(proxy_dialer(&runtime, "Thordata-ISP").as_deref(), Some("JMS-leaf"));
+        assert_eq!(proxy_dialer(&runtime, "Exit-Only"), None);
+
+        runtime.update_proxy_chain_config(None, None);
+        assert_eq!(proxy_dialer(&runtime, "Thordata-ISP").as_deref(), Some("JMS"));
+        assert_eq!(proxy_dialer(&runtime, "Exit-Only"), None);
+    }
+
+    #[test]
+    fn clearing_global_chain_removes_only_injected_dialer_proxy() {
+        let mut runtime = runtime_from_yaml(
+            r#"
+proxies:
+  - name: entry
+    type: ss
+    server: a.example
+    port: 443
+  - name: exit
+    type: ss
+    server: b.example
+    port: 443
+  - name: Thordata-ISP
+    type: http
+    server: isp.example
+    port: 6666
+    dialer-proxy: JMS
+"#,
+        );
+
+        runtime.update_proxy_chain_config(Some(chain_names(&["entry", "exit"])), None);
+        assert_eq!(proxy_dialer(&runtime, "exit").as_deref(), Some("entry"));
+        assert_eq!(proxy_dialer(&runtime, "Thordata-ISP").as_deref(), Some("JMS"));
+
+        runtime.update_proxy_chain_config(None, None);
+        assert_eq!(proxy_dialer(&runtime, "exit"), None);
+        assert_eq!(proxy_dialer(&runtime, "Thordata-ISP").as_deref(), Some("JMS"));
+    }
+
+    #[test]
+    fn persisted_chain_from_json_skips_empty() {
+        assert!(IRuntime::persisted_chain_from_json(None).is_none());
+        assert!(IRuntime::persisted_chain_from_json(Some(&serde_json::json!([]))).is_none());
+        let chain = IRuntime::persisted_chain_from_json(Some(&serde_json::json!(["JMS", "Thordata-ISP"])));
+        let names: Vec<_> = chain
+            .and_then(|value| value.as_sequence().cloned())
+            .unwrap()
+            .into_iter()
+            .filter_map(|value| value.as_str().map(str::to_owned))
+            .collect();
+        assert_eq!(names, vec!["JMS".to_string(), "Thordata-ISP".to_string()]);
     }
 }

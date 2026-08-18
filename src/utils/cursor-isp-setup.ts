@@ -43,14 +43,26 @@ export const DEFAULT_CURSOR_ISP_SETUP: CursorIspSetupInput = {
 export const GLOBAL_RULES_UID = 'Rules'
 
 const CURSOR_PROCESS_NAMES = [
+  'Cursor',
+  'Cursor Helper',
+  'Cursor Helper (GPU)',
+  'Cursor Helper (Plugin)',
+  'Cursor Helper (Renderer)',
   'Cursor.exe',
   'Cursor Helper.exe',
   'Cursor Helper (GPU).exe',
   'Cursor Helper (Plugin).exe',
   'Cursor Helper (Renderer).exe',
+  'Grok Bot',
+  'Grok Bot Helper',
 ]
 
+const CURSOR_PROCESS_NAME_REGEXES = ['(?i)^Cursor']
+
+const CURSOR_PROCESS_PATH_REGEXES = ['(?i)Cursor\\.app']
+
 const CURSOR_DOMAIN_SUFFIXES = [
+  'cursorvm.com',
   'cursor.sh',
   'cursor.com',
   'cursorapi.com',
@@ -115,6 +127,12 @@ export const validateSetupInput = (
 
 export const buildCursorIspRules = (exitGroup: string): string[] => [
   ...CURSOR_PROCESS_NAMES.map((name) => `PROCESS-NAME,${name},${exitGroup}`),
+  ...CURSOR_PROCESS_NAME_REGEXES.map(
+    (pattern) => `PROCESS-NAME-REGEX,${pattern},${exitGroup}`,
+  ),
+  ...CURSOR_PROCESS_PATH_REGEXES.map(
+    (pattern) => `PROCESS-PATH-REGEX,${pattern},${exitGroup}`,
+  ),
   ...CURSOR_DOMAIN_SUFFIXES.map(
     (domain) => `DOMAIN-SUFFIX,${domain},${exitGroup}`,
   ),
